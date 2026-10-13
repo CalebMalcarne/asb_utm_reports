@@ -1,0 +1,9 @@
+.data/
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+exports/
+*.sqlite3*
+*.key
+*_snapshot.json

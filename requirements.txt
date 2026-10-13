@@ -1,0 +1,6 @@
+streamlit>=1.50,<2
+pandas>=2.2,<3
+requests>=2.32,<3
+phonenumbers>=8.13,<10
+cryptography>=44
+tzdata>=2025.1
