@@ -49,3 +49,30 @@ def test_live_schedule_save_and_test_email_use_mocks(tmp_path,monkeypatch):
     assert len(calls)==1
     assert 'attachments' not in calls[0]
     assert store.jobs()[0]['status']=='accepted'
+
+def test_connect_saves_current_form_values_before_authentication(tmp_path,monkeypatch):
+    from storage import Store
+    from api import Pipedrive
+    monkeypatch.setenv('ASB_REPORTS_DATA_DIR',str(tmp_path))
+    store=Store(); settings=store.settings()
+    settings.update(company='oldcompany',pipedrive_token='old-token')
+    store.save_settings(settings)
+    calls=[]
+    def current_user(self):
+        calls.append(('account',self.company,self.session.headers['x-api-token']))
+        assert store.settings()['pipedrive_token']=='new-token'
+        return {'id':7}
+    def fields(self):
+        calls.append(('fields',self.company,self.session.headers['x-api-token']))
+        return []
+    monkeypatch.setattr(Pipedrive,'current_user',current_user)
+    monkeypatch.setattr(Pipedrive,'fields',fields)
+    app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=30).run()
+    next(r for r in app.radio if r.label=='Menu').set_value('Settings').run()
+    next(x for x in app.text_input if x.label=='Company subdomain').set_value(' https://newcompany.pipedrive.com/ ')
+    next(x for x in app.text_input if x.label=='Pipedrive API token').set_value(' new-token ')
+    next(b for b in app.button if b.label=='Save & connect Pipedrive / refresh fields').click().run()
+    assert not app.exception
+    assert not app.error
+    assert calls==[('account','newcompany','new-token'),('fields','newcompany','new-token')]
+    assert store.settings()['company']=='newcompany'

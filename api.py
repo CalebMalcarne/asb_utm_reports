@@ -45,11 +45,43 @@ class Client:
         raise APIError('Request failed.')
 
 class Pipedrive(Client):
+    @staticmethod
+    def normalize_company(company):
+        value = (company or '').strip().lower()
+        match = re.fullmatch(r'(?:https://)?([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\.pipedrive\.com(?:/[^?#]*)?', value)
+        if match: value = match.group(1)
+        if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]*[a-z0-9])?', value):
+            raise ValueError('Enter your Pipedrive company subdomain or its https://company.pipedrive.com URL.')
+        return value
+
     def __init__(self, company, token, progress=None):
-        if not re.fullmatch(r'[A-Za-z0-9-]+', company or ''):
-            raise ValueError('Enter just the Pipedrive company subdomain, not a URL.')
+        self.company = self.normalize_company(company)
+        token = (token or '').strip()
         if not token: raise ValueError('Save a Pipedrive API token in Settings.')
-        super().__init__(f'https://{company}.pipedrive.com/api/v2/', {'x-api-token': token}, progress=progress, interval=.3)
+        if any(c.isspace() or ord(c) < 32 or ord(c) > 126 for c in token) or token.startswith(('"', "'")):
+            raise ValueError('Paste only the Pipedrive personal API token, without quotes, spaces, or a Bearer prefix.')
+        super().__init__(f'https://{self.company}.pipedrive.com/api/', {'x-api-token': token}, progress=progress, interval=.3)
+
+    def get(self, path, params=None, *, version='v2'):
+        try:
+            return super().get(f'{version}/{path}', params)
+        except APIError as exc:
+            if exc.status == 401:
+                raise APIError(
+                    f'Pipedrive rejected authentication (HTTP 401) for {self.company}.pipedrive.com. '
+                    'In that same Pipedrive company, open Personal preferences > API and copy your current personal API token. '
+                    'Enter it in Settings, then click Save & connect Pipedrive / refresh fields. '
+                    'Use a personal API token, not an OAuth client secret or an Aircall/SendGrid key. '
+                    'Tokens are specific to a user and company; an old or regenerated token will not work.', 401) from None
+            if exc.status == 403:
+                raise APIError('Pipedrive denied access (HTTP 403). Ask your Pipedrive admin to check API access and your user permissions.', 403) from None
+            raise
+
+    def current_user(self):
+        data = self.get('users/me', version='v1').get('data')
+        if not isinstance(data, dict) or not data.get('id'):
+            raise APIError('Pipedrive returned an invalid account response.')
+        return data
 
     def pages(self, resource, params=None):
         query = {'limit':500, **(params or {})}

@@ -5,7 +5,7 @@ from datetime import datetime,date,timedelta,time as walltime,timezone
 from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
-from api import APIError,Aircall
+from api import APIError,Aircall,Pipedrive
 from storage import Store
 from core import (UTMS,PRESETS,period,parse_dt,field_code,field_name,auto_mapping,tag_catalog,
                   summarize,public_rows,csv_bytes)
@@ -62,8 +62,8 @@ if page=='Settings':
         a,b=st.columns(2)
         with a:
             st.subheader('Pipedrive')
-            company=st.text_input('Company subdomain',settings['company'],placeholder='yourcompany')
-            pd_key=st.text_input('Pipedrive API token',settings['pipedrive_token'],type='password')
+            company=st.text_input('Company subdomain',settings['company'],placeholder='yourcompany',help='Company subdomain or https://yourcompany.pipedrive.com URL; use the same company as your personal API token.')
+            pd_key=st.text_input('Pipedrive API token',settings['pipedrive_token'],type='password',help='Pipedrive → Personal preferences → API. Paste the personal token only, not an OAuth client secret.')
             st.subheader('Aircall')
             ac_id=st.text_input('Aircall API ID',settings['aircall_id'],type='password')
             ac_key=st.text_input('Aircall API token',settings['aircall_token'],type='password')
@@ -75,7 +75,13 @@ if page=='Settings':
             region=st.selectbox('SendGrid data region',['US','EU'],index=['US','EU'].index(settings['sendgrid_region']))
             zones=['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','UTC']
             zone=st.selectbox('Report timezone',zones,index=zones.index(settings['timezone']) if settings['timezone'] in zones else 0)
-        if st.form_submit_button('Save API settings',type='primary'):
+        save=st.form_submit_button('Save API settings')
+        connect=st.form_submit_button('Save & connect Pipedrive / refresh fields',type='primary')
+        if save or connect:
+            try:
+                company=Pipedrive.normalize_company(company) if company.strip() else ''
+            except ValueError as exc:
+                show_error(exc); st.stop()
             changed=company.strip()!=settings['company'] or pd_key.strip()!=settings['pipedrive_token']
             settings.update(company=company.strip(),pipedrive_token=pd_key.strip(),aircall_id=ac_id.strip(),aircall_token=ac_key.strip(),
                             sendgrid_key=sg_key.strip(),sender_email=sender.strip(),sender_name=sender_name.strip(),sendgrid_region=region,timezone=zone)
@@ -85,23 +91,23 @@ if page=='Settings':
                 for schedule in store.schedules(): store.enable(schedule['id'],False)
             store.save_settings(settings); st.success('Settings saved. If the Pipedrive connection changed, schedules were paused; refresh the field mapping before enabling them.')
     st.caption('Credentials are encrypted locally. The encryption key is kept in the same .data folder, so protect that folder with your OS account permissions. It is excluded from Git.')
-    c,d=st.columns(2)
-    with c:
-        if st.button('Connect Pipedrive / refresh fields'):
-            try:
-                fields=pd_client(store.settings()).fields(); store.put('fields',fields)
-                current=store.settings()
-                inferred=auto_mapping(fields)
-                current['utm_fields']={u:current.get('utm_fields',{}).get(u) or inferred.get(u,'') for u in UTMS}
-                store.save_settings(current); settings=current
-                st.success(f'Connected. Loaded {len(fields)} person-field definitions.')
-            except Exception as exc: show_error(exc)
-    with d:
-        if st.button('Test Aircall connection'):
-            try:
-                s=store.settings(); Aircall(s['aircall_id'],s['aircall_token']).get('tags',{'per_page':1})
-                st.success('Aircall connection succeeded.')
-            except Exception as exc: show_error(exc)
+    if connect:
+        try:
+            client=pd_client(store.settings())
+            account=client.current_user()
+            st.success(f'Credentials accepted for {client.company}.pipedrive.com (user ID {account["id"]}).')
+            fields=client.fields(); store.put('fields',fields)
+            current=store.settings()
+            inferred=auto_mapping(fields)
+            current['utm_fields']={u:current.get('utm_fields',{}).get(u) or inferred.get(u,'') for u in UTMS}
+            store.save_settings(current); settings=current
+            st.success(f'Connected. Loaded {len(fields)} person-field definitions.')
+        except Exception as exc: show_error(exc)
+    if st.button('Test Aircall connection'):
+        try:
+            s=store.settings(); Aircall(s['aircall_id'],s['aircall_token']).get('tags',{'per_page':1})
+            st.success('Aircall connection succeeded.')
+        except Exception as exc: show_error(exc)
     fields=store.get('fields',[])
     if fields:
         st.subheader('Pipedrive field mapping')

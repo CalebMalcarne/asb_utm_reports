@@ -37,7 +37,7 @@ Open **Settings** and enter:
 
 | Setting | Value |
 | --- | --- |
-| Pipedrive company | Subdomain only: `yourcompany` from `yourcompany.pipedrive.com` |
+| Pipedrive company | `yourcompany` or `https://yourcompany.pipedrive.com` |
 | Pipedrive API token | Token belonging to a user who can see all relevant people |
 | Aircall API ID/token | Your Aircall credentials |
 | SendGrid API key | A SendGrid key with Mail Send permission; not a Twilio SMS Auth Token |
@@ -46,7 +46,7 @@ Open **Settings** and enter:
 | SendGrid region | US/global by default; EU only for a regional EU subuser |
 | Report timezone | Defaults to America/New_York |
 
-Save the settings, then click **Connect Pipedrive / refresh fields**. The app retrieves the actual account schema and infers exact-name UTM fields. Confirm or change the field mappings. Duplicate field names require explicit mapping; the API field code is displayed to distinguish them.
+Click **Save & connect Pipedrive / refresh fields**. This saves the values you just entered, checks the account credentials, then loads the fields. The app retrieves the actual account schema and infers exact-name UTM fields. Confirm or change the field mappings. Duplicate field names require explicit mapping; the API field code is displayed to distinguish them.
 
 Map `utm_source`, `utm_campaign`, and any other available UTM fields. A person needs at least one nonempty mapped UTM value to enter the report. A missing value in the particular grouping dimension appears as `(missing)`; the person remains eligible when another mapped UTM exists.
 
@@ -61,6 +61,19 @@ Those two similarly named fields are not assumed to be identical. Choose the one
 API secrets are encrypted in the local `.data/reports.sqlite3` settings record. The local encryption key lives in `.data/settings.key`; protect the entire folder with normal OS account permissions. Encryption is not protection against someone who can read both files. The folder is excluded from Git and from the deliverable. Scheduled recipients and run history also live in the database. Reports and transcripts are held in the current browser session until exported.
 
 The app listens on localhost and has no multi-user authentication. Use it on your computer or a secured internal machine. Do not expose port 8501 directly to the internet.
+
+### Pipedrive HTTP 401 troubleshooting
+
+The app uses Pipedrive's documented `x-api-token` header. HTTP 401 means Pipedrive rejected authentication; it does not identify exactly which credential is wrong.
+
+1. Open the same Pipedrive company whose subdomain you entered in Settings.
+2. Go to **Personal preferences → API** and copy the current **personal API token**. Do not use an OAuth client ID/secret, password, or another service's key. Each company has its own token.
+3. Paste it into the password field and click **Save & connect Pipedrive / refresh fields**. This now saves and tests the entered values in one action, avoiding tests with previously saved credentials.
+4. If the account check succeeds but field loading fails, the app shows the successful credential check separately. Check API access with your Pipedrive admin if access is denied.
+
+Do not share tokens in chat, screenshots, or GitHub. An old token stops working if it has been regenerated; update this app with the current token. There is no need to regenerate a working token just to test this tool.
+
+To update a local copy, stop the launcher, pull/download the latest repository code, and restart `start_windows.bat`. Keep the existing `.data` folder in the app folder to preserve credentials and schedules; never commit it.
 
 ## Build a report
 
