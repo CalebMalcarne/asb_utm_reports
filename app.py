@@ -8,7 +8,7 @@ import streamlit as st
 from api import APIError,Aircall,Pipedrive
 from storage import Store
 from core import (UTMS,PRESETS,period,parse_dt,field_code,field_name,auto_mapping,tag_catalog,
-                  summarize,public_rows,csv_bytes)
+                  summarize,public_rows,csv_bytes,statistic_tags,group_tabs,group_filename)
 from service import pd_client,fetch_people,build,enrich,select_rows,export_parts,zip_parts
 from scheduler import next_run,validate_schedule
 from mailer import make_payload,report_payload,send,DeliveryUnknown
@@ -172,7 +172,14 @@ if page=='Reports':
     with b: rule=st.selectbox('Match rule',['Any selected tag','All selected tags'])
     with c:
         grouping=st.selectbox('Group by',['Source + campaign','utm_source','utm_campaign','utm_medium','utm_content','utm_term'])
-    options={**data['options'],'tags':selected,'tag_rule':rule,'group_by':['utm_source','utm_campaign'] if grouping=='Source + campaign' else [grouping]}
+    with st.expander('Qualified / contacted statistic tags'):
+        st.caption('Each statistic counts a person once if they have any of its selected tags. Defaults use the exact Qualified and Contacted tags; an unconfigured statistic is shown as —.')
+        stat_tags={}
+        defaults=statistic_tags(catalog,data['options'].get('stat_tags'))
+        for name in ('qualified','contacted'):
+            stat_tags[name]=st.multiselect(name.title()+' tags',list(catalog),default=[t for t in defaults[name] if t in catalog],format_func=lambda k:catalog[k],key='stat_'+name+'_'+dataset_key)
+    data['options']['stat_tags']=copy.deepcopy(stat_tags)
+    options={**data['options'],'tags':selected,'tag_rule':rule,'stat_tags':stat_tags,'group_by':['utm_source','utm_campaign'] if grouping=='Source + campaign' else [grouping]}
     if not selected: st.info('Select a tag to identify qualified/client people. Group totals still show all UTM people.')
     fingerprint=json.dumps(options,sort_keys=True)+data['fetched_at']
     if st.session_state.get('options_key')!=fingerprint:
@@ -194,53 +201,71 @@ if page=='Reports':
             st.session_state.report=fresh; st.session_state.options_key=fingerprint
         except Exception as exc: show_error(exc); st.stop()
     report=st.session_state.report
-    summary=summarize(report['rows'],report['catalog'])
-    n=len(report['rows']); matching=sum(r['matches_tag'] for r in report['rows'])
-    for col,label,value in zip(st.columns(4),['UTM people','UTM groups','Matching people','Match rate'],[n,len(summary),matching,f'{matching/n:.1%}' if n else '—']): col.metric(label,value)
-    groups=report_scope(report,'export')
-    st.session_state.export_groups=groups
-    filtered=select_rows(report,groups)
-    st.dataframe(pd.DataFrame([{k:v for k,v in r.items() if k!='group_key'} for r in summarize(filtered,report['catalog'])]),hide_index=True,width='stretch')
-    only=st.checkbox('Show/export only people matching the selected tags',False)
-    detail=select_rows(report,groups,only)
-    st.dataframe(pd.DataFrame(public_rows(detail)),hide_index=True,width='stretch')
-    if not filtered: st.info('No people in the selected UTM groups.')
-    parts=export_parts(report,groups,only)
-    x,y,z=st.columns(3)
-    with x: st.download_button('Summary CSV',parts['utm_summary.csv'],'utm_summary.csv','text/csv',disabled=not filtered)
-    with y: st.download_button('People CSV',parts['people.csv'],'utm_people.csv','text/csv',disabled=not filtered)
-    with z: st.download_button('Full report ZIP',zip_parts(parts),'asb_utm_report.zip','application/zip',disabled=not filtered)
-    st.caption('The summary denominator remains all people in the selected groups. The detail checkbox does not inflate the match rate.')
-    st.subheader('Aircall activity & transcripts')
-    target_rows=select_rows(report,groups)
-    names={r['person_id']:f'{r["name"]} · person {r["person_id"]}' for r in target_rows}
-    ids=st.multiselect('People to retrieve',list(names),default=[r['person_id'] for r in target_rows if r['matches_tag']],
-                        format_func=lambda k:names[k],key='aircall_people_'+fingerprint+str(groups))
-    c1,c2,c3=st.columns(3)
-    with c1: activity_begin=st.date_input('Activity from',parse_dt(data['start']).astimezone(ZoneInfo(tz)).date())
-    with c2: activity_finish=st.date_input('Activity through',datetime.now(ZoneInfo(tz)).date())
-    with c3: transcripts=st.checkbox('Fetch available transcripts',True)
-    if st.button('Fetch calls & transcripts',disabled=not ids):
-        try:
-            ac_start,ac_end,_,_=period('Custom',tz,custom=(activity_begin,activity_finish))
-            with st.status('Retrieving selected phone numbers…',expanded=True) as status:
-                message=st.empty()
-                st.session_state.report=enrich(report,settings,ids,ac_start,ac_end,transcripts,message.write,DemoAircall() if data['demo'] else None)
-                status.update(label='Aircall retrieval complete',state='complete')
-            st.rerun()
-        except Exception as exc: show_error(exc)
-    if report['calls']:
-        display_ids={r['person_id'] for r in filtered}
-        calls=[c for c in report['calls'] if c['person_id'] in display_ids]
-        st.dataframe(pd.DataFrame([{k:v for k,v in c.items() if k not in ('transcript','group_key')} for c in calls]),hide_index=True,width='stretch')
-        if calls:
-            chosen=st.selectbox('Read a transcript',[c['call_id'] for c in calls])
-            call=next(c for c in calls if c['call_id']==chosen)
-            st.text_area('Transcript',call['transcript'] or f'Transcript: {call["transcript_status"]}',height=220,disabled=True)
-            st.download_button('Aircall activity CSV',csv_bytes([{k:v for k,v in c.items() if k!='group_key'} for c in calls]),'aircall_activity.csv','text/csv')
-    if report['issues']:
-        with st.expander('Matching issues'): st.dataframe(pd.DataFrame(report['issues']),hide_index=True)
-    st.caption('All call directions and durations are included. Transcript availability depends on Aircall. Shared numbers within this cohort are flagged rather than assigned to multiple people.')
+    summary=summarize(report['rows'],report['catalog'],report['options'].get('stat_tags'))
+    st.caption(f"{len(report['rows']):,} UTM people across {len(summary):,} groups. Select a tab to view and export that group.")
+    if not summary:
+        st.info('No UTM people in this reporting period.'); st.stop()
+    tab_groups=group_tabs(summary)
+    tab_key='utm_tabs_'+json.dumps(options['group_by'])+'_'+data['fetched_at']
+    tabs=st.tabs(list(tab_groups),key=tab_key,on_change='rerun')
+    for tab,(label,group_key) in zip(tabs,tab_groups.items()):
+        if not tab.open: continue
+        with tab:
+            groups=[group_key]
+            st.session_state.export_groups=groups
+            filtered=select_rows(report,groups)
+            stat=next(r for r in summary if r['group_key']==group_key)
+            filename=group_filename(group_key)
+            st.caption(stat['utm_group'])
+            a,b,c,d=st.columns(4)
+            a.metric('People in this UTM group',stat['people'])
+            b.metric('Matching selected tags',stat['matching_people'],delta=f"{stat['match_pct']:.1f}% of group",delta_color='off')
+            for col,name in ((c,'qualified'),(d,'contacted')):
+                pct=stat[name+'_pct']; count=stat[name+'_people']
+                col.metric(name.title(),f'{pct:.1f}%' if pct is not None else '—',
+                           delta=f"{count} of {stat['people']} people" if count is not None else 'Select statistic tags',delta_color='off')
+            st.caption('Qualified and contacted are based on current Pipedrive tags. Each percentage uses everyone in this tab, including people hidden by the matching-only filter.')
+            only=st.checkbox('Show/export only people matching the selected tags',False,key='only_'+group_key)
+            detail=select_rows(report,groups,only)
+            st.subheader('Data sheet')
+            st.dataframe(pd.DataFrame(public_rows(detail)),hide_index=True,width='stretch')
+            if not detail: st.info('No people match this detail filter. Group statistics still use all people in this tab.')
+            parts=export_parts(report,groups,only)
+            x,y,z=st.columns(3)
+            with x: st.download_button('Summary CSV',parts['utm_summary.csv'],filename+'_summary.csv','text/csv')
+            with y: st.download_button('People CSV',parts['people.csv'],filename+'_people.csv','text/csv')
+            with z: st.download_button('Full report ZIP',zip_parts(parts),filename+'_report.zip','application/zip')
+            st.caption('These downloads contain only this UTM group. Both CSVs include qualified/contacted counts and percentages; the ZIP also includes any fetched activity and transcripts for this group.')
+            st.subheader('Aircall activity & transcripts')
+            target_rows=select_rows(report,groups)
+            names={r['person_id']:f'{r["name"]} · person {r["person_id"]}' for r in target_rows}
+            ids=st.multiselect('People to retrieve',list(names),default=[r['person_id'] for r in target_rows if r['matches_tag']],
+                                format_func=lambda k:names[k],key='aircall_people_'+fingerprint+str(groups))
+            c1,c2,c3=st.columns(3)
+            with c1: activity_begin=st.date_input('Activity from',parse_dt(data['start']).astimezone(ZoneInfo(tz)).date())
+            with c2: activity_finish=st.date_input('Activity through',datetime.now(ZoneInfo(tz)).date())
+            with c3: transcripts=st.checkbox('Fetch available transcripts',True)
+            if st.button('Fetch calls & transcripts',disabled=not ids):
+                try:
+                    ac_start,ac_end,_,_=period('Custom',tz,custom=(activity_begin,activity_finish))
+                    with st.status('Retrieving selected phone numbers…',expanded=True) as status:
+                        message=st.empty()
+                        st.session_state.report=enrich(report,settings,ids,ac_start,ac_end,transcripts,message.write,DemoAircall() if data['demo'] else None)
+                        status.update(label='Aircall retrieval complete',state='complete')
+                    st.rerun()
+                except Exception as exc: show_error(exc)
+            if report['calls']:
+                display_ids={r['person_id'] for r in filtered}
+                calls=[c for c in report['calls'] if c['person_id'] in display_ids]
+                st.dataframe(pd.DataFrame([{k:v for k,v in c.items() if k not in ('transcript','group_key')} for c in calls]),hide_index=True,width='stretch')
+                if calls:
+                    chosen=st.selectbox('Read a transcript',[c['call_id'] for c in calls])
+                    call=next(c for c in calls if c['call_id']==chosen)
+                    st.text_area('Transcript',call['transcript'] or f'Transcript: {call["transcript_status"]}',height=220,disabled=True)
+                    st.download_button('Aircall activity CSV',csv_bytes([{k:v for k,v in c.items() if k!='group_key'} for c in calls]),filename+'_aircall_activity.csv','text/csv')
+            if report['issues']:
+                with st.expander('Matching issues'): st.dataframe(pd.DataFrame([issue for issue in report['issues'] if str(issue.get('person_id','')) in {r['person_id'] for r in filtered}]),hide_index=True)
+            st.caption('All call directions and durations are included. Transcript availability depends on Aircall. Shared numbers within this cohort are flagged rather than assigned to multiple people.')
     st.stop()
 
 # Email & scheduling
@@ -301,7 +326,7 @@ with schedules:
         editing=st.selectbox('Schedule',['New schedule']+[s['id'] for s in existing],format_func=lambda sid:next((s['name'] for s in existing if s['id']==sid),sid))
         selected_schedule=next((s for s in existing if s['id']==editing),None)
         saved_spec=selected_schedule['spec'] if selected_schedule else {}
-        st.caption('Saving uses the current report’s UTM mapping, tag field, tag selection, and grouping. Date ranges below are relative and recalculated each run.')
+        st.caption('Saving uses the current report’s UTM mapping, tag field, tag selection, qualified/contacted statistic tags, and grouping. Date ranges below are relative and recalculated each run.')
         name=st.text_input('Schedule name',selected_schedule['name'] if selected_schedule else 'Weekly UTM report',key='schedule_name_'+editing)
         to=st.text_area('Scheduled recipient emails',saved_spec.get('recipients',''),key='schedule_to_'+editing)
         modes=['Daily','Weekly','Monthly','Every N hours']

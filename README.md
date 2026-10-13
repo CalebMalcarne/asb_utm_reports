@@ -16,7 +16,7 @@ A local Python dashboard that uses Pipedrive as the source of truth for advertis
 
 - Install Python 3.11 or newer if necessary.
 - Extract the ZIP completely and open `asb_utm_reports`.
-- Double-click `start_windows.bat`.
+- Double-click `start_windows.bat`. It also updates dependencies; UTM tabs require Streamlit 1.59 or newer.
 - The first launch installs dependencies. The browser opens at http://127.0.0.1:8501.
 - Keep the launcher terminal open. It runs both the dashboard and the schedule worker.
 - Click **Load demo** to explore with synthetic data.
@@ -82,8 +82,9 @@ To update a local copy, stop the launcher, pull/download the latest repository c
 3. Choose one or more report tags. Qualified is selected automatically when the label is available with that exact name.
 4. Choose Any selected tag or All selected tags.
 5. Choose grouping. Default: source + campaign.
-6. Use All UTM groups or select specific groups.
-7. Download Summary CSV, People CSV, or the Full report ZIP.
+6. Select a UTM tab. Labels show the actual code (or source / campaign when grouping by both).
+7. Review that group’s qualified/contacted percentages and data sheet, then download its Summary CSV, People CSV, or Full report ZIP. Each download contains only the current tab.
+8. Expand **Qualified / contacted statistic tags** to change which Pipedrive tags count toward each statistic. Defaults use exact Qualified and Contacted tag names.
 
 Changing the date controls does not silently change a previously fetched report. Its loaded period is displayed; click Fetch again for new dates. Changing tags or grouping reuses the current data and any retrieved call evidence.
 
@@ -95,6 +96,18 @@ Pipedrive's list API has update-time filters, which are not creation-time filter
 
 Tags represent the **current** state at fetch time. A Client tag in a September cohort can mean the person became a client in October. This version does not infer a historical qualification or conversion date. It also does not query Pipedrive deals; the person tags you select define the status being measured.
 
+### Group tabs and statistics
+
+Each UTM group has its own tab, data sheet, stats, and export buttons. Changing tabs also changes the Aircall retrieval selection and visible activity. Group-specific filenames use the UTM values plus a short identifier to prevent collisions. Email and scheduling still support all groups or a selected set.
+
+**Qualified %** = people with any configured Qualified statistic tag / all people in that UTM group × 100. **Contacted %** uses the configured Contacted tags with the same denominator. A person with several matching tags counts once per statistic. The two percentages can overlap; they are not stages of a historical funnel. A Qualified tag alone does not imply Contacted unless you include it in the Contacted selector. These stats use the selected Pipedrive person tag field, not call duration or Aircall retrieval success.
+
+If no statistic tag is configured or an exact default tag is unavailable, show **—** and export blank statistics instead of implying 0%. With configured tags but no matching people, export 0%. Tag names are matched exactly, ignoring case; Unqualified does not count as Qualified. Percentage columns are numbers on a 0–100 scale.
+
+The **Summary CSV** has `qualified_people`, `qualified_pct`, `contacted_people`, and `contacted_pct`. The **People CSV** repeats those group statistics on each person row as `group_qualified_people`, `group_qualified_pct`, `group_contacted_people`, `group_contacted_pct`, with `group_people` as the denominator. Repeated group totals are context columns; do not sum them across person rows. The summary CSV retains the group's stats even when a matching-only filter leaves no detail rows.
+
+Scheduled CSVs use the saved statistic tag selections; save an existing schedule again to update those selections. Older schedules without explicit statistic settings use the exact Qualified and Contacted names.
+
 ### Counting
 
 Each Pipedrive person ID is one person, once per group. Distinct duplicate CRM people remain distinct; the tool does not silently merge them by name or phone. A group summary includes all UTM people, the count matching the tag rule, the match percentage, and counts for every available/discovered tag. Tag columns can overlap and are not additive.
@@ -103,7 +116,7 @@ Selecting **only matching people** filters the detail attachment/table. It does 
 
 ## Aircall activity and transcripts
 
-The default retrieval selection is the people matching your report tags in the selected UTM groups. You can manually add/remove people. Select a separate activity start/end, then click **Fetch calls & transcripts**.
+The default retrieval selection is the people matching your report tags in the current UTM tab. You can manually add/remove people. Select a separate activity start/end, then click **Fetch calls & transcripts**.
 
 - Searches every normalized phone number on each selected Pipedrive person.
 - Uses the other party's phone (`raw_digits`), not ASB's own number.

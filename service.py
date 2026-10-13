@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from api import Pipedrive,Aircall,APIError
 from core import (UTMS,field_code,people_rows,tag_catalog,summarize,public_rows,csv_bytes,
-                  parse_dt,phone,six_month_boundary)
+                  parse_dt,phone,six_month_boundary,statistic_tags)
 
 def pd_client(settings,progress=None): return Pipedrive(settings['company'],settings['pipedrive_token'],progress)
 
@@ -29,9 +29,11 @@ def fetch_people(settings,options,start,end,progress=None):
             'fetched_at':datetime.now(timezone.utc).isoformat(),'options':copy.deepcopy(options),'demo':False}
 
 def build(data,options):
+    options=copy.deepcopy(options)
     rows,invalid=people_rows(data['people'],data['fields'],options,parse_dt(data['start']),parse_dt(data['end']))
     catalog=tag_catalog(data['fields'],data['people'],options.get('tag_field','label_ids'))
-    unknown=set(options.get('tags',[]))-set(catalog)
+    options['stat_tags']=statistic_tags(catalog,options.get('stat_tags'))
+    unknown=(set(options.get('tags',[])) | {t for tokens in options['stat_tags'].values() for t in tokens})-set(catalog)
     # Text-tag values may be absent in a fresh period; preserve their literal meaning.
     missing_ids={t for t in unknown if t.startswith('id:')}
     if missing_ids: raise ValueError('Selected tag IDs are unavailable in the refreshed Pipedrive catalog; review tag settings.')
@@ -91,11 +93,14 @@ def export_parts(report,groups=None,matched_only=False,include_details=True,incl
     cohort=select_rows(report,groups)
     people=[r for r in cohort if not matched_only or r['matches_tag']]
     ids={r['person_id'] for r in people}
-    summary=summarize(cohort,report['catalog'])
+    summary=summarize(cohort,report['catalog'],report['options'].get('stat_tags'))
+    stats_by_group={r['group_key']:{'group_'+k:r[k] for k in ('people','qualified_people','qualified_pct','contacted_people','contacted_pct')} for r in summary}
     summary=[{k:v for k,v in r.items() if k!='group_key'} for r in summary]
-    parts={'utm_summary.csv':csv_bytes(summary,['utm_group','people','matching_people','match_pct','aircall_people_fetched','calls']+list(dict.fromkeys(k for r in summary for k in r if k.startswith('tag:'))))}
+    stat_columns=['qualified_people','qualified_pct','contacted_people','contacted_pct']
+    parts={'utm_summary.csv':csv_bytes(summary,['utm_group','people','matching_people','match_pct']+stat_columns+['aircall_people_fetched','calls']+list(dict.fromkeys(k for r in summary for k in r if k.startswith('tag:'))))}
     if include_details:
-        parts['people.csv']=csv_bytes(public_rows(people),list(public_rows(people)[0]) if people else ['person_id','name','utm_group','matches_tag'])
+        detail=[{**public,**stats_by_group[row['group_key']]} for row,public in zip(people,public_rows(people))]
+        parts['people.csv']=csv_bytes(detail,list(detail[0]) if detail else ['person_id','name','utm_group','matches_tag','group_people']+['group_'+k for k in stat_columns])
     calls=[{k:v for k,v in c.items() if k!='group_key' and (include_transcripts or k!='transcript')} for c in report['calls'] if c['person_id'] in ids]
     if include_calls:
         parts['aircall_activity.csv']=csv_bytes(calls,list(calls[0]) if calls else ['person_id','call_id','transcript_status'])
@@ -105,7 +110,9 @@ def export_parts(report,groups=None,matched_only=False,include_details=True,incl
     metadata={'version':2,'report':report['meta'],'options':report['options'],'selected_groups':groups,
               'matched_people_only':matched_only,'summary_denominator':'All UTM people in selected groups, regardless of detail filter',
               'tag_meaning':'Current Pipedrive labels/custom tags at fetch time, not historical conversion events',
-              'activity_requested':bool(report['meta'].get('aircall_fetched_at')),'issues':report['issues']}
+              'statistics':'Qualified/contacted count any configured tag once per person. Percentages use all people in the group; blank means no statistic tag configured.',
+              'activity_requested':bool(report['meta'].get('aircall_fetched_at')),
+              'issues':[issue for issue in report['issues'] if str(issue.get('person_id','')) in {r['person_id'] for r in cohort}]}
     parts['report_settings.json']=json.dumps(metadata,indent=2,ensure_ascii=False).encode('utf-8')
     return parts
 

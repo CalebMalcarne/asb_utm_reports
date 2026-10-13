@@ -1,6 +1,7 @@
 import calendar
 import csv
 import io
+import hashlib
 import json
 import re
 from collections import defaultdict
@@ -126,7 +127,25 @@ def people_rows(people,fields,options,start,end):
         rows.append(row)
     return rows,invalid_dates
 
-def summarize(rows,catalog=None):
+def statistic_tags(catalog, configured=None):
+    """Exact tag IDs; each statistic accepts any of its configured tags."""
+    return {name:list(configured[name]) if configured is not None and name in configured else
+            [token for token,label in catalog.items() if label.strip().casefold()==name]
+            for name in ('qualified','contacted')}
+
+def group_tabs(summary):
+    """Use actual UTM values, disambiguating delimiter/missing-value collisions."""
+    labels=[' / '.join(value or '(missing)' for value in json.loads(r['group_key'])) for r in summary]
+    return {label if labels.count(label)==1 else f'{label} [{hashlib.sha256(r["group_key"].encode()).hexdigest()[:10]}]':r['group_key']
+            for label,r in zip(labels,summary)}
+
+def group_filename(group_key):
+    values=json.loads(group_key)
+    slug=re.sub(r'[^A-Za-z0-9_-]+','_', '_'.join(values)).strip('_')[:100] or 'utm'
+    return slug+'_'+hashlib.sha256(group_key.encode()).hexdigest()[:10]
+
+def summarize(rows,catalog=None,stat_tags=None):
+    stats=statistic_tags(catalog or {},stat_tags)
     groups=defaultdict(list)
     for row in rows: groups[row['group_key']].append(row)
     out=[]
@@ -135,6 +154,10 @@ def summarize(rows,catalog=None):
         result={'group_key':key,'utm_group':group[0]['utm_group'],'people':len(group),'matching_people':matched,
                 'match_pct':round(100*matched/len(group),2),'aircall_people_fetched':sum(r['aircall_status']=='complete' for r in group),
                 'calls':sum(r['call_count'] or 0 for r in group)}
+        for name,tokens in stats.items():
+            count=sum(bool(set(tokens)&set(r['tag_tokens'])) for r in group) if tokens else None
+            result[name+'_people']=count
+            result[name+'_pct']=round(100*count/len(group),2) if count is not None else None
         for token,label in (catalog or {}).items(): result[f'tag: {label} [{token}]']=sum(token in r['tag_tokens'] for r in group)
         out.append(result)
     return out
