@@ -11,7 +11,7 @@ from core import (UTMS,PRESETS,period,parse_dt,field_code,field_name,auto_mappin
                   summarize,summarize_all,public_rows,csv_bytes,statistic_tags,group_tabs,group_filename)
 from service import pd_client,fetch_people,build,enrich,select_rows,export_parts,zip_parts
 from scheduler import next_run,validate_schedule
-from mailer import make_payload,report_payload,send,DeliveryUnknown
+from mailer import make_payload,report_payload,send,DeliveryUnknown,check_connection,connection_label,normalize_key
 from demo import sample,DemoAircall
 
 UTC=timezone.utc
@@ -69,17 +69,19 @@ if page=='Settings':
             ac_key=st.text_input('Aircall API token',settings['aircall_token'],type='password')
         with b:
             st.subheader('Twilio SendGrid')
-            sg_key=st.text_input('SendGrid API key',settings['sendgrid_key'],type='password')
+            sg_key=st.text_input('SendGrid API key',settings['sendgrid_key'],type='password',help='Paste the full secret shown once when created in SendGrid Settings → API Keys (usually SG.…). The API Key ID/name and Twilio SMS credentials cannot send SendGrid email.')
             sender=st.text_input('Verified sender email',settings['sender_email'])
             sender_name=st.text_input('Sender name',settings['sender_name'])
-            region=st.selectbox('SendGrid data region',['US','EU'],index=['US','EU'].index(settings['sendgrid_region']))
+            region=st.selectbox('SendGrid data region',['US','EU'],index=['US','EU'].index(settings['sendgrid_region']),help='US = global endpoint for ordinary accounts. EU is only for a configured EU regional subuser.')
             zones=['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','UTC']
             zone=st.selectbox('Report timezone',zones,index=zones.index(settings['timezone']) if settings['timezone'] in zones else 0)
         save=st.form_submit_button('Save API settings')
         connect=st.form_submit_button('Save & connect Pipedrive / refresh fields',type='primary')
-        if save or connect:
+        check_sg=st.form_submit_button('Save & check SendGrid (no email)')
+        if save or connect or check_sg:
             try:
                 company=Pipedrive.normalize_company(company) if company.strip() else ''
+                sg_key=normalize_key(sg_key) if sg_key.strip() else ''
             except ValueError as exc:
                 show_error(exc); st.stop()
             changed=company.strip()!=settings['company'] or pd_key.strip()!=settings['pipedrive_token']
@@ -91,6 +93,12 @@ if page=='Settings':
                 for schedule in store.schedules(): store.enable(schedule['id'],False)
             store.save_settings(settings); st.success('Settings saved. If the Pipedrive connection changed, schedules were paused; refresh the field mapping before enabling them.')
     st.caption('Credentials are encrypted locally. The encryption key is kept in the same .data folder, so protect that folder with your OS account permissions. It is excluded from Git.')
+    if settings.get('sendgrid_key'):
+        try: st.caption('SendGrid: '+connection_label(store.settings()))
+        except ValueError as exc: show_error(exc)
+    if check_sg:
+        try: st.success(check_connection(store.settings()))
+        except Exception as exc: show_error(exc)
     if connect:
         try:
             client=pd_client(store.settings())
@@ -280,6 +288,13 @@ st.title('Email & scheduling')
 test,current,schedules,history=st.tabs(['Test email','Send current report','Schedules','Send history'])
 with test:
     st.write('Send a simple connection test to one specified address. It contains no client data.')
+    st.caption('Uses saved Settings. To test a newly pasted key without sending mail, use Settings → Save & check SendGrid (no email).')
+    if settings.get('sendgrid_key'):
+        try: st.caption(connection_label(settings))
+        except ValueError as exc: show_error(exc)
+    if st.button('Check saved SendGrid connection (no email)'):
+        try: st.success(check_connection(store.settings()))
+        except Exception as exc: show_error(exc)
     to=st.text_input('Test email address',placeholder='you@yourcompany.com')
     if st.button('Send test email',type='primary'):
         try:

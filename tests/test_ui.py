@@ -115,3 +115,29 @@ def test_all_and_individual_tabs_have_scoped_controls_and_no_switch_reruns(tmp_p
     assert {c['person_id'] for c in app.session_state.report['calls']}=={'4'}
     assert rows('activity_csv_'+scope)[0]['person_id']=='4'
     assert not app.get('tab_container')[0].proto.tab_container.id
+
+def test_save_and_check_sendgrid_uses_new_form_credentials_without_email(tmp_path,monkeypatch):
+    from storage import Store
+    import mailer
+    monkeypatch.setenv('ASB_REPORTS_DATA_DIR',str(tmp_path))
+    store=Store(); s=store.settings();s.update(sendgrid_key='old-key',sender_email='old@example.invalid')
+    store.save_settings(s)
+    calls=[]
+    class Response: status_code=200
+    def post(url,**kwargs):
+        calls.append((url,kwargs))
+        assert store.settings()['sendgrid_key']=='SG.new_id.new_secret'
+        return Response()
+    monkeypatch.setattr(mailer.requests,'post',post)
+    app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=30).run()
+    next(r for r in app.radio if r.label=='Menu').set_value('Settings').run()
+    next(x for x in app.text_input if x.label=='SendGrid API key').set_value(' Bearer SG.new_id.new_secret ')
+    next(x for x in app.text_input if x.label=='Verified sender email').set_value('new@example.invalid')
+    next(b for b in app.button if b.label=='Save & check SendGrid (no email)').click().run()
+    assert not app.exception and not app.error
+    assert len(calls)==1
+    assert calls[0][1]['headers']['Authorization']=='Bearer SG.new_id.new_secret'
+    assert calls[0][1]['json']['from']['email']=='new@example.invalid'
+    assert calls[0][1]['json']['mail_settings']['sandbox_mode']['enable'] is True
+    assert store.jobs()==[] # validation is not recorded as a delivery
+    assert any('Sandbox validation passed' in x.value for x in app.success)

@@ -133,6 +133,24 @@ Aircall provides six months of call history through this API. Earlier live activ
 
 The full ZIP includes summary, people, activity CSVs, readable per-call transcript text files, and report metadata. Transcript text is also included in the activity CSV when requested.
 
+## SendGrid authentication troubleshooting
+
+Use **Settings → Save & check SendGrid (no email)** after entering a new key. This saves the current form values and calls the same Mail Send endpoint using SendGrid sandbox mode. A successful check returns HTTP 200 and requests no delivery; it does not prove inbox delivery or all sender/account sending checks. The normal **Send test email** button remains a real send to the address you enter. No real emails are sent automatically by a connection check.
+
+The Settings and Test email screens show the endpoint and a SHA-256 fingerprint of the saved key, never the key itself. A changed key produces a different fingerprint. Copying surrounding whitespace, a Bearer prefix, or matching outer quotes is handled; embedded whitespace is rejected locally. Keys are not shortened to a fixed length.
+
+For **HTTP 401**, read the new **SendGrid says** detail before creating another key:
+
+- Use the complete secret displayed once at creation in **SendGrid Settings → API Keys**. The API Key ID/name shown later in the list is not the secret. Twilio SMS account credentials cannot authenticate SendGrid Mail Send.
+- Enable **Mail Send** access on the key. Extra account-management permissions are not needed for this diagnostic.
+- Choose **US** for the global endpoint (`api.sendgrid.com`). Choose **EU** only for an EU regional subuser (`api.eu.sendgrid.com`). The app never retries against another region automatically.
+- If SendGrid reports a disabled/restricted account or IP access issue, resolve that account restriction. A new key does not resolve an account-level restriction.
+- If the error says the authorization grant is invalid, expired, or revoked, confirm the full current secret was saved in this app and belongs to the selected regional account.
+
+**HTTP 403** has separate guidance for permission, verified sender, and access restrictions. The provider's structured message is displayed with recognized secrets redacted; HTML/error page bodies are not shown. You can share the displayed error message for troubleshooting, but never share the API key. Request failures are not automatically retried; ambiguous real-send failures still require checking SendGrid before resending.
+
+References: [API keys](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys), [sandbox mode](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/sandbox-mode), [Mail Send endpoints](https://www.twilio.com/docs/sendgrid/api-reference/mail-send).
+
 ## Email
 
 Open **Email & scheduling**.
