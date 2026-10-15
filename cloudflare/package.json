@@ -1,0 +1,29 @@
+{
+  "name": "asb-utm-reports-cloudflare",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "node --test test/*.test.js",
+    "test:ui": "node scripts/smoke-ui.js",
+    "check": "node scripts/check-config.js",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "deploy": "npm run check && wrangler deploy",
+    "migrate": "wrangler d1 migrations apply asb-utm-reports --remote"
+  },
+  "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
+    "fflate": "^0.8.2",
+    "jose": "^6.1.0",
+    "libphonenumber-js": "^1.12.0"
+  },
+  "devDependencies": {
+    "happy-dom": "^21.0.1",
+    "playwright": "^1.64.1",
+    "wrangler": "^4.0.0"
+  }
+}

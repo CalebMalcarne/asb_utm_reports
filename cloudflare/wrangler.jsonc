@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "asb-utm-reports",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {"directory": "./public", "binding": "ASSETS", "run_worker_first": true},
+  "routes": [{"pattern": "reports.example.com", "custom_domain": true}],
+  "vars": {
+    "APP_ORIGIN": "https://reports.example.com",
+    "ACCESS_TEAM_DOMAIN": "YOUR-TEAM.cloudflareaccess.com",
+    "ACCESS_AUD": "REPLACE_WITH_ACCESS_APPLICATION_AUD",
+    "ADMIN_EMAIL": "admin@example.com",
+    "USER_EMAIL": "user@example.com"
+  },
+  "d1_databases": [{
+    "binding": "DB", "database_name": "asb-utm-reports",
+    "database_id": "00000000-0000-0000-0000-000000000000",
+    "migrations_dir": "migrations"
+  }],
+  "r2_buckets": [{"binding": "REPORTS", "bucket_name": "asb-utm-reports"}],
+  "workflows": [{"binding": "REPORT_JOB", "name": "asb-utm-report-job", "class_name": "ReportJob"}],
+  "triggers": {"crons": ["*/5 * * * *"]},
+  "observability": {"enabled": false}
+}

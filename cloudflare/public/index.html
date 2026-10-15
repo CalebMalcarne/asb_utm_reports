@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ASB · UTM Reports</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head>
+<body>
+  <header><div><span class="brand">ASB</span><strong>UTM Reports</strong></div><div class="identity"><span id="identity">Signing in…</span><a href="/cdn-cgi/access/logout">Sign out</a></div></header>
+  <nav aria-label="Main navigation"><button class="nav active" data-page="reports">Reports</button><button class="nav admin" data-page="emails" hidden>Email &amp; schedules</button><button class="nav admin" data-page="settings" hidden>Settings</button></nav>
+  <main>
+    <div id="notice" role="status" aria-live="polite" hidden></div>
+    <section id="page-reports">
+      <div class="heading"><div><p class="eyebrow">LEAD SOURCE PERFORMANCE</p><h1>Know where your leads convert.</h1><p class="muted">Compare UTM sources, qualification, and contact rates.</p></div><button id="refresh-reports" class="secondary">Refresh reports</button></div>
+      <details class="card admin" id="generate-panel" hidden><summary>Create a report</summary>
+        <form id="report-form"><div class="grid">
+          <label>Report name<input name="name" value="UTM performance report" maxlength="150" required></label>
+          <label>Period<select name="preset" class="period-select"></select></label>
+          <label>Time zone<input name="timezone" value="America/New_York" required></label>
+          <label data-custom hidden>Start date<input name="start_date" type="date"></label><label data-custom hidden>End date (inclusive)<input name="end_date" type="date"></label>
+          <label data-days hidden>Previous complete days<input name="days" type="number" value="7" min="1" max="366"></label>
+        </div>
+        <div class="grid"><label>Group by<select id="report-group-by" multiple size="5"></select></label>
+          <label>Match these Pipedrive tags<select id="report-tags" multiple size="5"></select></label>
+          <div><label>Tag rule<select name="tag_rule"><option value="any">Any selected tag</option><option value="all">All selected tags</option></select></label><label class="check"><input name="aircall" type="checkbox">Include Aircall calls and transcripts for matching people</label></div>
+        </div>
+        <p class="hint">Cohorts use person creation dates. Tags reflect their values when the report is fetched. Aircall covers the cohort start through the fetch time; shared phone numbers are flagged and skipped.</p>
+        <button type="submit">Create report</button><span class="hint">Runs in the background. You can close this page.</span></form>
+      </details>
+      <div class="card report-picker"><label>Saved report<select id="saved-report"><option value="">No reports yet</option></select></label><button id="older-reports" class="secondary" hidden>Load older reports</button><p id="report-meta" class="hint"></p></div>
+      <div id="empty-report" class="empty">Saved reports will appear here once the administrator creates one.</div>
+      <div id="report-content" hidden>
+        <div id="utm-tabs" class="tabs" role="tablist" aria-label="UTM groups"></div>
+        <div role="tabpanel" id="group-panel" tabindex="0">
+          <div class="heading compact"><h2 id="group-title">All UTM codes</h2><label class="check"><input type="checkbox" id="matched-only">Show matching people only</label></div>
+          <div id="stats" class="stats"></div><p class="hint">Percentages use all people in the selected group. “Not configured” means no statistic tag was selected.</p>
+          <div class="toolbar"><button data-export="people">Export people CSV</button><button data-export="summary" class="secondary">Export statistics CSV</button><button data-export="activity" class="secondary">Export activity CSV</button><button data-export="zip" class="secondary">Download full ZIP</button><span id="export-scope" class="hint"></span></div>
+          <details class="card"><summary>Export multiple UTM groups</summary><label>Choose groups<select id="export-groups" multiple size="6"></select></label><button id="export-selected" class="secondary">Download selected groups ZIP</button></details>
+          <div id="comparison" class="card"><h3>Source comparison</h3><div class="table-scroll" id="comparison-table"></div></div>
+          <div class="card"><div class="heading compact"><h3>People</h3><label class="search">Search name, phone, email, or UTM<input id="people-search" type="search" placeholder="Search this group…"></label></div><div class="table-scroll" id="people-table"></div><div class="pager"><button id="previous-people" class="secondary">Previous</button><span id="people-page"></span><button id="next-people" class="secondary">Next</button></div></div>
+          <details class="card"><summary>Aircall activity &amp; transcripts</summary><p id="activity-meta" class="hint"></p><div class="table-scroll" id="activity-table"></div><button id="more-calls" class="secondary" hidden>Show more calls</button></details>
+          <div id="report-issues" class="hint"></div>
+        </div>
+      </div>
+      <details class="card admin" id="jobs-panel" hidden open><summary>Background jobs</summary><p class="hint">Accepted means SendGrid accepted the request; it does not confirm delivery. Uncertain sends are never automatically retried.</p><div id="jobs" class="table-scroll"></div></details>
+    </section>
+    <section id="page-emails" class="admin" hidden>
+      <p class="eyebrow">ADMINISTRATION</p><h1>Email &amp; schedules</h1>
+      <div class="grid two">
+        <form class="card" id="test-form"><h2>Send a test email</h2><p class="hint">Sends a real test message to this one address.</p><label>Test email<input name="recipients" type="email" required placeholder="you@yourcompany.com"></label><button type="submit">Send test email</button></form>
+        <form class="card" id="email-form"><h2>Email the current report</h2><p id="email-scope" class="hint">Select a saved report first.</p><label>Recipients<input name="recipients" placeholder="one@example.com, two@example.com" required></label><label>Subject<input name="subject" value="ASB UTM report" required></label><button type="submit">Email current tab</button></form>
+      </div>
+      <form class="card" id="schedule-form"><h2 id="schedule-title">Create a schedule</h2><p class="hint">Every run fetches fresh Pipedrive data. Schedules save the current report tag/group selections and statistic mappings. Settings changes pause existing schedules for review.</p>
+        <div class="grid"><label>Name<input name="name" value="Weekly UTM performance" required maxlength="150"></label><label>Recipients<input name="recipients" required placeholder="reports@yourcompany.com"></label><label>Subject<input name="subject" value="ASB UTM report" required></label></div>
+        <div class="grid"><label>Reporting period<select name="preset" class="period-select"></select></label><label data-days hidden>Previous complete days<input name="days" type="number" min="1" max="366" value="7"></label><label>Time zone<input name="timezone" value="America/New_York" required></label><label>Frequency<select name="frequency"><option value="weekly">Weekly</option><option value="daily">Daily</option><option value="monthly">Monthly</option><option value="interval">Every N hours</option></select></label></div>
+        <div class="grid"><label data-frequency="daily weekly monthly">Send at<input name="time" type="time" value="09:00" required></label><label data-frequency="weekly">Weekday<select name="weekday"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="7">Sunday</option></select></label><label data-frequency="monthly" hidden>Day of month<input name="day" type="number" min="1" max="31" value="1"><small>Clamped to the last day of shorter months.</small></label><label data-frequency="interval" hidden>Interval in hours<input name="hours" type="number" min="1" max="8760" value="168"></label></div>
+        <div class="grid"><label>UTM scope<select name="scope"><option value="all">All UTM codes, including new codes</option><option value="selected">Groups selected in Reports → Export multiple</option></select></label><div><label class="check"><input name="aircall" type="checkbox">Include Aircall for matching people</label><label class="check"><input name="matched_only" type="checkbox">Matching people only in detail attachments</label><label class="check"><input name="enabled" type="checkbox">Enable recurring emails</label></div></div>
+        <button type="submit" id="save-schedule">Save schedule</button><button type="button" id="cancel-schedule" class="secondary" hidden>Cancel edit</button>
+      </form><div class="card"><h2>Schedules</h2><div id="schedules" class="table-scroll"></div></div>
+    </section>
+    <section id="page-settings" class="admin" hidden>
+      <p class="eyebrow">ADMINISTRATION</p><h1>Settings</h1><p class="muted">API secrets are encrypted on the server. Leave a key blank to keep its saved value.</p>
+      <form id="settings-form">
+        <div class="card"><h2>Pipedrive</h2><div class="grid"><label>Company subdomain<input name="company" placeholder="your-company" autocomplete="off"></label><label>Personal API token<input name="pipedrive_key" type="password" autocomplete="new-password"><small data-secret="pipedrive_key"></small></label><label>Default time zone<input name="timezone" value="America/New_York" required></label></div><button type="button" id="connect-pipedrive" class="secondary">Save &amp; connect Pipedrive / refresh fields</button></div>
+        <div class="card"><h2>UTM fields &amp; tags</h2><p class="hint">Connect Pipedrive first to load available fields. Choose the person label field or your custom tag field.</p><div id="utm-mappings" class="grid"></div><div class="grid"><label>Tag field<select name="tag_field" id="tag-field"></select></label><label>Default grouping<select id="settings-group-by" multiple size="5"></select></label><label>Default matching tags<select id="settings-tags" multiple size="6"></select></label></div><div class="grid"><label>Qualified statistic tags<select id="qualified-tags" multiple size="6"></select></label><label>Contacted statistic tags<select id="contacted-tags" multiple size="6"></select></label><label>Additional text tags (one per line)<textarea id="text-tags" rows="5" placeholder="For a plain-text Pipedrive tag field only"></textarea><small>Use exact tag text; it is matched without case sensitivity.</small><button type="button" id="add-text-tags" class="secondary">Add text tag choices</button></label></div></div>
+        <div class="card"><h2>Aircall</h2><div class="grid"><label>API ID<input name="aircall_id" type="password" autocomplete="new-password"><small data-secret="aircall_id"></small></label><label>API token<input name="aircall_key" type="password" autocomplete="new-password"><small data-secret="aircall_key"></small></label></div></div>
+        <div class="card"><h2>Twilio SendGrid</h2><div class="grid"><label>API secret<input name="sendgrid_key" type="password" autocomplete="new-password"><small data-secret="sendgrid_key"></small></label><label>Verified From email<input name="sender" type="email" placeholder="reports@yourcompany.com"></label><label>API region<select name="sendgrid_region"><option value="global">US / global</option><option value="eu">EU regional subuser</option></select></label></div><p class="hint">The From address must be a verified SendGrid sender or use an authenticated domain. Full API access does not bypass sender verification or sending quotas.</p><button type="button" id="check-sendgrid" class="secondary">Save &amp; validate SendGrid (no email)</button></div>
+        <button type="submit">Save settings</button><p class="hint">Saving settings pauses schedules. Re-enable them after reviewing the configuration.</p>
+      </form>
+      <div class="card"><h2>Access</h2><p>Cloudflare Access handles sign-in. The two allowed email addresses and their roles are configured as Worker variables: ADMIN_EMAIL and USER_EMAIL. The user can view and export reports; all settings, imports, and email actions require the admin.</p></div>
+    </section>
+  </main><footer>ASB UTM Reports · Private Cloudflare workspace</footer>
+</body></html>
