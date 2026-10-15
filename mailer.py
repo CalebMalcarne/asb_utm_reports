@@ -41,7 +41,14 @@ def rejection_message(response,settings,key):
         message=re.sub(r'(?i)Bearer\s+[^\s,;]+','Bearer [redacted]',message)
         messages.append(' '.join(message.split())[:400])
     status=response.status_code
-    if status==401:
+    if any('maximum credits exceeded' in message.casefold() for message in messages):
+        guidance=('Sending allowance exceeded. This is an account quota/billing restriction; '
+                  'full API key access or creating another key does not increase sending credits. '
+                  'In SendGrid, open Settings > Account Details > Your Products and check the Email API plan, '
+                  'usage/reset date, trial status, and billing/payment status. Wait for the applicable reset '
+                  'or resolve the plan/billing restriction. Upgrading Marketing Campaigns does not increase Email API credits. '
+                  'If the active paid plan has credits remaining, contact SendGrid support.')
+    elif status==401:
         guidance=('Authentication was rejected. Use the full secret from SendGrid Settings > API Keys, '
                   'not its name/ID or a Twilio SMS key. Save the new key and check its Mail Send permission. '
                   'Use US/global unless this is an EU regional subuser. If a new key still fails, check '

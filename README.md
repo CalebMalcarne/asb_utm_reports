@@ -139,7 +139,9 @@ Use **Settings → Save & check SendGrid (no email)** after entering a new key. 
 
 The Settings and Test email screens show the endpoint and a SHA-256 fingerprint of the saved key, never the key itself. A changed key produces a different fingerprint. Copying surrounding whitespace, a Bearer prefix, or matching outer quotes is handled; embedded whitespace is rejected locally. Keys are not shortened to a fixed length.
 
-For **HTTP 401**, read the new **SendGrid says** detail before creating another key:
+For **Maximum credits exceeded**, the blocker is the account’s sending allowance or billing state, even though SendGrid returns HTTP 401. Full key permissions do not increase credits. Check **Settings → Account Details → Your Products** for the **Email API** plan, usage/reset date, trial status, and successful payment. Wait for the applicable reset or resolve the plan/billing restriction; upgrading Marketing Campaigns does not increase Email API credits. If an active paid Email API plan has remaining credits but still fails, contact SendGrid support.
+
+For other **HTTP 401** errors, read the **SendGrid says** detail before creating another key:
 
 - Use the complete secret displayed once at creation in **SendGrid Settings → API Keys**. The API Key ID/name shown later in the list is not the secret. Twilio SMS account credentials cannot authenticate SendGrid Mail Send.
 - Enable **Mail Send** access on the key. Extra account-management permissions are not needed for this diagnostic.

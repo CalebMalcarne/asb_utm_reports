@@ -74,3 +74,17 @@ def test_sandbox_rejection_never_falls_back_to_real_send_or_other_region():
     assert len(calls)==1
     assert calls[0][0]=='https://api.eu.sendgrid.com/v3/mail/send'
     assert calls[0][1]['json']['mail_settings']['sandbox_mode']['enable'] is True
+
+def test_maximum_credits_is_classified_as_quota_not_invalid_key():
+    calls=[]
+    def post(*args,**kwargs):
+        calls.append(kwargs)
+        return Response(401,'Maximum credits exceeded')
+    with pytest.raises(ValueError) as error: send(settings(),{},post)
+    message=str(error.value)
+    assert 'Sending allowance exceeded' in message
+    assert 'Email API plan' in message and 'billing' in message
+    assert 'Authentication was rejected' not in message
+    assert 'Use the full secret' not in message
+    assert 'SendGrid says: Maximum credits exceeded' in message
+    assert len(calls)==1
