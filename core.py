@@ -162,6 +162,12 @@ def summarize(rows,catalog=None,stat_tags=None):
         out.append(result)
     return out
 
+def summarize_all(rows,catalog=None,stat_tags=None):
+    """Overall rates use the people denominator, never averages of group rates."""
+    combined=[{**r,'group_key':'[]','utm_group':'All UTM codes'} for r in rows]
+    totals=summarize(combined,catalog,stat_tags)
+    return totals[0] if totals else None
+
 def public_rows(rows):
     return [{k:('; '.join(v) if isinstance(v,list) else v) for k,v in r.items() if k not in ('tag_tokens','group_key')} for r in rows]
 
@@ -178,3 +184,4 @@ def csv_bytes(rows,columns=None):
 def six_month_boundary(now):
     year,month0=divmod(now.year*12+now.month-1-6,12); month=month0+1
     return now.replace(year=year,month=month,day=min(now.day,calendar.monthrange(year,month)[1]))
+

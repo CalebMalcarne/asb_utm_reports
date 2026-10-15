@@ -82,7 +82,7 @@ To update a local copy, stop the launcher, pull/download the latest repository c
 3. Choose one or more report tags. Qualified is selected automatically when the label is available with that exact name.
 4. Choose Any selected tag or All selected tags.
 5. Choose grouping. Default: source + campaign.
-6. Select a UTM tab. Labels show the actual code (or source / campaign when grouping by both).
+6. Select **All UTM codes** for combined stats and a comparison of every group, or choose an individual UTM tab. Labels show the actual code (or source / campaign when grouping by both).
 7. Review that group’s qualified/contacted percentages and data sheet, then download its Summary CSV, People CSV, or Full report ZIP. Each download contains only the current tab.
 8. Expand **Qualified / contacted statistic tags** to change which Pipedrive tags count toward each statistic. Defaults use exact Qualified and Contacted tag names.
 
@@ -98,13 +98,13 @@ Tags represent the **current** state at fetch time. A Client tag in a September 
 
 ### Group tabs and statistics
 
-Each UTM group has its own tab, data sheet, stats, and export buttons. Changing tabs also changes the Aircall retrieval selection and visible activity. Group-specific filenames use the UTM values plus a short identifier to prevent collisions. Email and scheduling still support all groups or a selected set.
+**All UTM codes** is the first tab. It shows total people, matching people, and overall qualified/contacted percentages, a comparison table for every UTM group, and a combined people sheet. Overall percentages divide total matching people by total people; they do not average the individual group percentages. Each UTM group also has its own tab, data sheet, stats, and export buttons. Each tab has independent filters, Aircall retrieval controls, and export buttons. Tab switching happens in the browser without rerunning the app, avoiding the full-page refresh that caused a jump to the top. Downloads also avoid rerunning the page. Tab contents are prepared together from the loaded report; changing tabs does not make API requests. Group-specific filenames use the UTM values plus a short identifier to prevent collisions. Email and scheduling still support all groups or a selected set.
 
 **Qualified %** = people with any configured Qualified statistic tag / all people in that UTM group × 100. **Contacted %** uses the configured Contacted tags with the same denominator. A person with several matching tags counts once per statistic. The two percentages can overlap; they are not stages of a historical funnel. A Qualified tag alone does not imply Contacted unless you include it in the Contacted selector. These stats use the selected Pipedrive person tag field, not call duration or Aircall retrieval success.
 
 If no statistic tag is configured or an exact default tag is unavailable, show **—** and export blank statistics instead of implying 0%. With configured tags but no matching people, export 0%. Tag names are matched exactly, ignoring case; Unqualified does not count as Qualified. Percentage columns are numbers on a 0–100 scale.
 
-The **Summary CSV** has `qualified_people`, `qualified_pct`, `contacted_people`, and `contacted_pct`. The **People CSV** repeats those group statistics on each person row as `group_qualified_people`, `group_qualified_pct`, `group_contacted_people`, `group_contacted_pct`, with `group_people` as the denominator. Repeated group totals are context columns; do not sum them across person rows. The summary CSV retains the group's stats even when a matching-only filter leaves no detail rows.
+The All UTM codes **Summary CSV** includes a `row_type=total` row followed by `row_type=utm_group` rows; do not sum the total row together with group rows. Individual-tab CSVs contain only their group. All-group email/scheduled summary exports use the same total-plus-groups format. The **Summary CSV** has `qualified_people`, `qualified_pct`, `contacted_people`, and `contacted_pct`. The **People CSV** repeats those group statistics on each person row as `group_qualified_people`, `group_qualified_pct`, `group_contacted_people`, `group_contacted_pct`, with `group_people` as the denominator. Repeated group totals are context columns; do not sum them across person rows. The summary CSV retains the group's stats even when a matching-only filter leaves no detail rows.
 
 Scheduled CSVs use the saved statistic tag selections; save an existing schedule again to update those selections. Older schedules without explicit statistic settings use the exact Qualified and Contacted names.
 
@@ -213,3 +213,4 @@ Tests cover UTM selection and denominators, native/custom tag parsing, person-cr
 - Aircall search/transcripts: https://developers.aircall.io/api-references
 - SendGrid Mail Send: https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send
 - SendGrid limits: https://www.twilio.com/docs/sendgrid/api-reference/mail-send
+

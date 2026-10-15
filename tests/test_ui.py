@@ -7,10 +7,10 @@ def test_demo_report_aircall_settings_and_email_screens(tmp_path,monkeypatch):
     assert not app.exception
     next(b for b in app.button if b.label=='Load demo').click().run()
     assert not app.exception
-    assert [m.value for m in app.metric]==['2','2','100.0%','0.0%']
+    assert [m.value for m in app.tabs[0].metric]==['5','3','60.0%','20.0%']
     next(b for b in app.button if b.label=='Fetch calls & transcripts').click().run()
     assert not app.exception
-    assert len(app.session_state.report['calls'])==2
+    assert len(app.session_state.report['calls'])==3
     next(r for r in app.radio if r.label=='Menu').set_value('Settings').run()
     assert not app.exception
     assert any(x.label=='Pipedrive API token' for x in app.text_input)
@@ -77,42 +77,41 @@ def test_connect_saves_current_form_values_before_authentication(tmp_path,monkey
     assert calls==[('account','newcompany','new-token'),('fields','newcompany','new-token')]
     assert store.settings()['company']=='newcompany'
 
-def test_switching_utm_tabs_changes_stats_people_and_download_contents(tmp_path,monkeypatch):
+def test_all_and_individual_tabs_have_scoped_controls_and_no_switch_reruns(tmp_path,monkeypatch):
     import streamlit as st
-    import csv,io,json
+    import csv,io
     monkeypatch.setenv('ASB_REPORTS_DATA_DIR',str(tmp_path))
     downloads={}; original=st.download_button
     def download(label,data,*args,**kwargs):
-        downloads[label]=(data,args[0] if args else kwargs.get('file_name'))
+        assert kwargs.get('on_click')=='ignore'
+        downloads[kwargs['key']]=(data,args[0] if args else kwargs.get('file_name'))
         return original(label,data,*args,**kwargs)
     monkeypatch.setattr(st,'download_button',download)
     app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=30).run()
     next(b for b in app.button if b.label=='Load demo').click().run()
     assert not app.exception
-    assert [t.label for t in app.tabs]==['AFLT2421 / Karmaoholic - 48824','instagram / organic','meta / retirement_october']
-    def rows(label): return list(csv.DictReader(io.StringIO(downloads[label][0].decode('utf-8-sig'))))
-    assert {r['person_id'] for r in rows('People CSV')}=={'1','2'}
-    before_filename=downloads['People CSV'][1]
-    def browser_run(label):
-        # AppTest's Tab is a Block, not a Widget, so supply the active tab
-        # state that a real browser sends alongside checkbox/button events.
-        states=app._tree.get_widget_states()
-        container=app.get('tab_container')[0]
-        states.widgets.add(id=container.proto.tab_container.id,string_value=label)
-        app._run(states)
-    browser_run('meta / retirement_october')
+    assert [t.label for t in app.tabs]==['All UTM codes','AFLT2421 / Karmaoholic - 48824','instagram / organic','meta / retirement_october']
+    # Static tabs do not register a widget that emits tab-change reruns.
+    assert not app.get('tab_container')[0].proto.tab_container.id
+    assert [m.value for m in app.tabs[0].metric]==['5','3','60.0%','20.0%']
+    assert [m.value for m in app.tabs[3].metric]==['2','1','50.0%','50.0%']
+    def rows(key): return list(csv.DictReader(io.StringIO(downloads[key][0].decode('utf-8-sig'))))
+    assert {r['person_id'] for r in rows('people_all')}=={'1','2','3','4','5'}
+    assert len(rows('summary_all'))==4
+    assert rows('summary_all')[0]['row_type']=='total'
+    assert rows('summary_all')[0]['qualified_pct']=='60.0'
+    key=next(r['group_key'] for r in app.session_state.report['rows'] if r['utm_source']=='meta')
+    scope='group_'+key
+    assert {r['person_id'] for r in rows('people_'+scope)}=={'3','4'}
+    assert downloads['people_all'][1]!=downloads['people_'+scope][1]
+    assert set(app.tabs[3].dataframe[0].value['person_id'])=={'3','4'}
+    app.tabs[3].checkbox[0].check().run()
     assert not app.exception
-    assert [m.value for m in app.metric]==['2','1','50.0%','50.0%']
-    assert {r['person_id'] for r in rows('People CSV')}=={'3','4'}
-    assert downloads['People CSV'][1]!=before_filename
-    assert set(app.dataframe[0].value['person_id'])=={'3','4'}
-    next(c for c in app.checkbox if c.label=='Show/export only people matching the selected tags').check()
-    browser_run('meta / retirement_october')
-    assert not app.exception
-    assert {r['person_id'] for r in rows('People CSV')}=={'4'}
-    assert rows('Summary CSV')[0]['qualified_pct']==rows('Summary CSV')[0]['contacted_pct']=='50.0'
-    # Fetching calls stays in this tab and does not include the affiliate group.
-    next(b for b in app.button if b.label=='Fetch calls & transcripts').click()
-    browser_run('meta / retirement_october')
+    assert {r['person_id'] for r in rows('people_'+scope)}=={'4'}
+    assert len(rows('people_all'))==5 # independent detail filters
+    assert rows('summary_'+scope)[0]['qualified_pct']=='50.0'
+    app.tabs[3].button[0].click().run()
     assert not app.exception
     assert {c['person_id'] for c in app.session_state.report['calls']}=={'4'}
+    assert rows('activity_csv_'+scope)[0]['person_id']=='4'
+    assert not app.get('tab_container')[0].proto.tab_container.id

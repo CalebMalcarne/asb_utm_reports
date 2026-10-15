@@ -125,3 +125,19 @@ def test_exports_omit_other_groups_calls_transcripts_and_matching_issues():
     assert [r['person_id'] for r in read_csv(parts['aircall_activity.csv'])]==['1']
     assert 'transcripts/call_1.txt' in parts and 'transcripts/call_3.txt' not in parts
     assert [r['person_id'] for r in json.loads(parts['report_settings.json'])['issues']]==['1']
+
+
+def test_overall_statistics_use_total_people_and_all_export_has_total_plus_groups():
+    data=sample(); report=build(data,data['options'])
+    overall=summarize_all(report['rows'],report['catalog'],report['options']['stat_tags'])
+    assert overall['people']==5 and overall['qualified_people']==3
+    assert overall['qualified_pct']==60.0 # not mean(100, 0, 50) = 50
+    assert overall['contacted_people']==1 and overall['contacted_pct']==20.0
+    parts=export_parts(report,None,matched_only=True)
+    summary=read_csv(parts['utm_summary.csv'])
+    assert len(summary)==4
+    assert summary[0]['row_type']=='total' and summary[0]['people']=='5'
+    assert summary[0]['qualified_pct']=='60.0'
+    assert all(r['row_type']=='utm_group' for r in summary[1:])
+    assert len(read_csv(parts['people.csv']))==3
+    assert summarize_all([],report['catalog']) is None

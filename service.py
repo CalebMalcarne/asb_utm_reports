@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from api import Pipedrive,Aircall,APIError
 from core import (UTMS,field_code,people_rows,tag_catalog,summarize,public_rows,csv_bytes,
-                  parse_dt,phone,six_month_boundary,statistic_tags)
+                  parse_dt,phone,six_month_boundary,statistic_tags,summarize_all)
 
 def pd_client(settings,progress=None): return Pipedrive(settings['company'],settings['pipedrive_token'],progress)
 
@@ -95,9 +95,12 @@ def export_parts(report,groups=None,matched_only=False,include_details=True,incl
     ids={r['person_id'] for r in people}
     summary=summarize(cohort,report['catalog'],report['options'].get('stat_tags'))
     stats_by_group={r['group_key']:{'group_'+k:r[k] for k in ('people','qualified_people','qualified_pct','contacted_people','contacted_pct')} for r in summary}
-    summary=[{k:v for k,v in r.items() if k!='group_key'} for r in summary]
+    summary=[{'row_type':'utm_group',**{k:v for k,v in r.items() if k!='group_key'}} for r in summary]
+    if groups is None and cohort:
+        total=summarize_all(cohort,report['catalog'],report['options'].get('stat_tags'))
+        summary.insert(0,{'row_type':'total',**{k:v for k,v in total.items() if k!='group_key'}})
     stat_columns=['qualified_people','qualified_pct','contacted_people','contacted_pct']
-    parts={'utm_summary.csv':csv_bytes(summary,['utm_group','people','matching_people','match_pct']+stat_columns+['aircall_people_fetched','calls']+list(dict.fromkeys(k for r in summary for k in r if k.startswith('tag:'))))}
+    parts={'utm_summary.csv':csv_bytes(summary,['row_type','utm_group','people','matching_people','match_pct']+stat_columns+['aircall_people_fetched','calls']+list(dict.fromkeys(k for r in summary for k in r if k.startswith('tag:'))))}
     if include_details:
         detail=[{**public,**stats_by_group[row['group_key']]} for row,public in zip(people,public_rows(people))]
         parts['people.csv']=csv_bytes(detail,list(detail[0]) if detail else ['person_id','name','utm_group','matches_tag','group_people']+['group_'+k for k in stat_columns])
@@ -121,3 +124,4 @@ def zip_parts(parts):
     with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:
         for name,value in parts.items(): z.writestr(name,value)
     return out.getvalue()
+
