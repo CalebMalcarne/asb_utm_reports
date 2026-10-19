@@ -8,8 +8,8 @@ import streamlit as st
 from api import APIError,Aircall,Pipedrive
 from storage import Store
 from core import (UTMS,PRESETS,period,parse_dt,field_code,field_name,auto_mapping,tag_catalog,
-                  summarize,summarize_all,public_rows,csv_bytes,statistic_tags,group_tabs,group_filename)
-from service import pd_client,fetch_people,build,enrich,select_rows,export_parts,zip_parts
+                  summarize,summarize_all,public_rows,csv_bytes,statistic_tags,group_tabs,group_filename,activity_dates,activity_window)
+from service import pd_client,fetch_people,build,enrich,select_rows,export_parts,full_report_parts,zip_parts
 from scheduler import next_run,validate_schedule
 from mailer import make_payload,report_payload,send,DeliveryUnknown,check_connection,connection_label,normalize_key
 from demo import sample,DemoAircall
@@ -199,7 +199,7 @@ if page=='Reports':
                 new_rows={r['person_id']:r for r in fresh['rows']}
                 for r in fresh['rows']:
                     old_r=old_rows.get(r['person_id'],{})
-                    for k in ['call_count','answered_calls','transcripts_available','aircall_status']:
+                    for k in ['call_count','answered_calls','transcripts_available','aircall_status','activity_start','activity_end']:
                         if k in old_r: r[k]=old_r[k]
                 for call in old['calls']:
                     if call['person_id'] in new_rows:
@@ -209,6 +209,8 @@ if page=='Reports':
             st.session_state.report=fresh; st.session_state.options_key=fingerprint
         except Exception as exc: show_error(exc); st.stop()
     report=st.session_state.report
+    report['meta']['name']=st.text_input('Report name',data.get('name','UTM performance report'),key='report_name_'+dataset_key)
+    report['meta'].setdefault('timezone',tz)
     summary=summarize(report['rows'],report['catalog'],report['options'].get('stat_tags'))
     st.caption(f"{len(report['rows']):,} UTM people across {len(summary):,} groups. Select a tab to view and export that group.")
     if not summary:
@@ -249,20 +251,23 @@ if page=='Reports':
             x,y,z=st.columns(3)
             with x: st.download_button('Summary CSV',parts['utm_summary.csv'],filename+'_summary.csv','text/csv',key='summary_'+scope,on_click='ignore')
             with y: st.download_button('People CSV',parts['people.csv'],filename+'_people.csv','text/csv',key='people_'+scope,on_click='ignore')
-            with z: st.download_button('Full report ZIP',zip_parts(parts),filename+'_report.zip','application/zip',key='zip_'+scope,on_click='ignore')
+            with z: st.download_button('Full report ZIP',zip_parts(full_report_parts(report,groups)),filename+'_report.zip','application/zip',key='zip_'+scope,on_click='ignore')
             st.caption('Downloads include all UTM codes. Summary CSV includes a total row and a row per group; use row_type to distinguish them.' if groups is None else 'These downloads contain only this UTM group. Both CSVs include qualified/contacted counts and percentages; the ZIP also includes any fetched activity and transcripts for this group.')
+            st.caption('The full ZIP includes separate all-people and matched-people CSVs, available activity for each, a UTM summary, a PDF summary, and named transcript files. Empty data files are omitted. The matching-only checkbox affects the standalone People CSV; the full ZIP always includes both datasets for this tab.')
             st.subheader('Aircall activity & transcripts')
             target_rows=select_rows(report,groups)
             names={r['person_id']:f'{r["name"]} · person {r["person_id"]}' for r in target_rows}
             ids=st.multiselect('People to retrieve',list(names),default=[r['person_id'] for r in target_rows if r['matches_tag']],
                                 format_func=lambda k:names[k],key='aircall_people_'+fingerprint+str(groups))
             c1,c2,c3=st.columns(3)
-            with c1: activity_begin=st.date_input('Activity from',parse_dt(data['start']).astimezone(ZoneInfo(tz)).date(),key='activity_begin_'+scope)
-            with c2: activity_finish=st.date_input('Activity through',datetime.now(ZoneInfo(tz)).date(),key='activity_finish_'+scope)
+            default_begin,default_finish=activity_dates(report['meta'],tz)
+            with c1: activity_begin=st.date_input('Activity from',default_begin,key='activity_begin_'+scope+'_'+dataset_key)
+            with c2: activity_finish=st.date_input('Activity through',default_finish,key='activity_finish_'+scope+'_'+dataset_key)
             with c3: transcripts=st.checkbox('Fetch available transcripts',True,key='transcripts_'+scope)
+            st.caption('Activity dates default to this loaded person creation period. Change either date to use a custom activity window. Fetch calls again to apply changes.')
             if st.button('Fetch calls & transcripts',disabled=not ids,key='fetch_'+scope):
                 try:
-                    ac_start,ac_end,_,_=period('Custom',tz,custom=(activity_begin,activity_finish))
+                    ac_start,ac_end=activity_window(report['meta'],tz,activity_begin,activity_finish)
                     with st.status('Retrieving selected phone numbers…',expanded=True) as status:
                         message=st.empty()
                         st.session_state.report=enrich(report,settings,ids,ac_start,ac_end,transcripts,message.write,DemoAircall() if data['demo'] else None)

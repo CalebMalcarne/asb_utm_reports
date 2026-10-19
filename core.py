@@ -50,6 +50,20 @@ def phone(value):
         return phonenumbers.format_number(p,phonenumbers.PhoneNumberFormat.E164) if phonenumbers.is_possible_number(p) else ''
     except phonenumbers.NumberParseException: return ''
 
+def activity_dates(meta,zone):
+    """Convert the cohort's exclusive upper bound to an inclusive date widget."""
+    tz=ZoneInfo(zone)
+    return (parse_dt(meta['start']).astimezone(tz).date(),
+            (parse_dt(meta['end'])-timedelta(microseconds=1)).astimezone(tz).date())
+
+def activity_window(meta,zone,begin,finish,now=None):
+    # Preserve the exact loaded bounds, including a partial current day, unless
+    # the user changes dates. Re-running later must not extend a default window.
+    if (begin,finish)==activity_dates(meta,zone):
+        return parse_dt(meta['start']),parse_dt(meta['end'])
+    start,end,_,_=period('Custom',zone,now=now,custom=(begin,finish))
+    return start,end
+
 def field_code(f): return str(f.get('field_code') or f.get('key') or '')
 def field_name(f): return str(f.get('field_name') or f.get('name') or field_code(f))
 def field_value(person,code): return (person.get('custom_fields') or {}).get(code,person.get(code))

@@ -116,7 +116,7 @@ Selecting **only matching people** filters the detail attachment/table. It does 
 
 ## Aircall activity and transcripts
 
-The default retrieval selection is the people matching your report tags in the current UTM tab. You can manually add/remove people. Select a separate activity start/end, then click **Fetch calls & transcripts**.
+The default retrieval selection is the people matching your report tags in the current UTM tab. You can manually add/remove people. **Activity from / through default to the loaded person creation period**, including its exact fetch-time cutoff for a partial current day. An exclusive midnight end is displayed as the preceding inclusive date. Changing either date opts into a custom activity window. Fetching a new cohort resets the defaults; ordinary reruns preserve your edits. Click **Fetch calls & transcripts** to apply the window. Each fetched person's activity window is recorded in their people CSV row.
 
 - Searches every normalized phone number on each selected Pipedrive person.
 - Uses the other party's phone (`raw_digits`), not ASB's own number.
@@ -131,7 +131,23 @@ The table shows answered-to-end elapsed seconds; this can include hold time and 
 
 Aircall provides six months of call history through this API. Earlier live activity requests are rejected to avoid presenting an incomplete history as complete. Requests near the 10,000-record cap are split into smaller date windows. If a single second exceeds the cap, the import fails explicitly. Transcript availability depends on your Aircall configuration, permissions, and whether that call has a generated transcript. A shared/recycled phone outside the selected Pipedrive cohort cannot be identified from this cohort alone.
 
-The full ZIP includes summary, people, activity CSVs, readable per-call transcript text files, and report metadata. Transcript text is also included in the activity CSV when requested.
+### Full report ZIP
+
+Enter a **Report name** above the UTM tabs. Each tab's Full report ZIP uses that tab's UTM scope and includes:
+
+| File | Contents |
+| --- | --- |
+| `Aircall_Activity.csv` | All fetched calls for people in the selected tab |
+| `all_People.csv` | Everyone in that tab, including nonmatching people |
+| `Match_people.csv` | Only people matching the selected Report tags and Match rule |
+| `Match_aircall_activity.csv` | Fetched calls belonging to those matching people |
+| `UTM_summary.csv` | UTM group statistics, plus the overall row in the All UTM codes tab |
+| `Overall Summary.pdf` | Report name, cohort dates, fetch/export timestamps, company, UTM information, searched tags, qualified/matched/contacted counts and percentages, and a table of qualified **or** matching people |
+| `transcripts/First_Last_<CALL ID>.txt` | Available transcript text, using the person's name and Aircall call ID |
+
+Empty data CSVs and blank/unavailable transcripts are omitted. The PDF still explains an empty scope. Names with more than two words retain those words separated by underscores; missing names use `Unknown_Person_<PERSON ID>_<CALL ID>.txt`. Unsafe filename characters are removed.
+
+The full ZIP always separates **all** people from **matching** people, regardless of the matching-only checkbox. That checkbox continues to filter the standalone People CSV and data sheet. All files respect the selected UTM tab; only the All UTM codes tab exports all groups. The PDF's qualified-or-matching table is a union, without duplicate people. Its percentages use all people in the tab, and “contacted” continues to mean the configured Pipedrive contacted tags. Call files contain only activity already fetched, not an automatic new Aircall pull. Optional email attachment selections retain their existing behavior.
 
 ## SendGrid authentication troubleshooting
 
@@ -207,7 +223,7 @@ The GitHub connection was inspected. `CalebMalcarne/Contact-Tool` is a different
 Run tests:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install pytest
+.\.venv\Scripts\python.exe -m pip install pytest pypdf
 .\.venv\Scripts\python.exe -m pytest tests -q
 ```
 
@@ -219,6 +235,7 @@ Tests cover UTM selection and denominators, native/custom tag parsing, person-cr
 - `api.py`: read-only Pipedrive/Aircall clients, pagination, rate-limit retries.
 - `core.py`: periods, UTM grouping, tag parsing, phone normalization, safe CSV.
 - `service.py`: shared interactive/scheduled report pipeline and transcript retrieval.
+- `pdf_summary.py`: paginated PDF summary for full-report ZIPs (ReportLab, generated in memory).
 - `mailer.py`: SendGrid payload construction and one-attempt sending.
 - `storage.py`: encrypted settings, schedule persistence, transactional job claiming.
 - `scheduler.py`: recurrence calculation, fresh report generation, background worker.

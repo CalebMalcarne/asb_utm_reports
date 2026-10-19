@@ -4,3 +4,5 @@ requests>=2.32,<3
 phonenumbers>=8.13,<10
 cryptography>=44
 tzdata>=2025.1
+reportlab>=4.4,<5
+

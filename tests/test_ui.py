@@ -109,12 +109,50 @@ def test_all_and_individual_tabs_have_scoped_controls_and_no_switch_reruns(tmp_p
     assert not app.exception
     assert {r['person_id'] for r in rows('people_'+scope)}=={'4'}
     assert len(rows('people_all'))==5 # independent detail filters
+    import zipfile
+    with zipfile.ZipFile(io.BytesIO(downloads['zip_'+scope][0])) as bundle:
+        def csv_rows(name): return list(csv.DictReader(io.StringIO(bundle.read(name).decode('utf-8-sig'))))
+        assert {r['person_id'] for r in csv_rows('all_People.csv')}=={'3','4'}
+        assert {r['person_id'] for r in csv_rows('Match_people.csv')}=={'4'}
+        assert 'Aircall_Activity.csv' not in bundle.namelist() # no calls fetched yet
+        assert bundle.read('Overall Summary.pdf').startswith(b'%PDF-')
     assert rows('summary_'+scope)[0]['qualified_pct']=='50.0'
     app.tabs[3].button[0].click().run()
     assert not app.exception
     assert {c['person_id'] for c in app.session_state.report['calls']}=={'4'}
     assert rows('activity_csv_'+scope)[0]['person_id']=='4'
     assert not app.get('tab_container')[0].proto.tab_container.id
+
+
+def test_activity_defaults_follow_loaded_cohort_and_reset_only_for_new_data(tmp_path,monkeypatch):
+    from demo import sample
+    from core import activity_dates,parse_dt
+    from datetime import timedelta
+    monkeypatch.setenv('ASB_REPORTS_DATA_DIR',str(tmp_path))
+    data=sample()
+    app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=30)
+    app.session_state['data']=data
+    app.run()
+    first,last=activity_dates(data,'America/New_York')
+    def dates(): return [x for x in app.tabs[0].date_input]
+    assert [x.value for x in dates()]==[first,last]
+    next(b for b in app.tabs[0].button if b.label=='Fetch calls & transcripts').click().run()
+    assert not app.exception
+    assert app.session_state.report['meta']['activity_end']==data['end']
+    dates()[1].set_value(last+timedelta(days=1)).run()
+    assert dates()[1].value==last+timedelta(days=1)
+    app.run()
+    assert dates()[1].value==last+timedelta(days=1) # custom dates survive ordinary reruns
+    next(b for b in app.tabs[0].button if b.label=='Fetch calls & transcripts').click().run()
+    assert parse_dt(app.session_state.report['meta']['activity_end'])>parse_dt(data['end'])
+    fresh=sample()
+    fresh['start']=(parse_dt(fresh['start'])-timedelta(days=7)).isoformat()
+    fresh['end']=(parse_dt(fresh['end'])-timedelta(days=7)).isoformat()
+    for person in fresh['people']: person['add_time']=(parse_dt(person['add_time'])-timedelta(days=7)).isoformat()
+    app.session_state['data']=fresh
+    app.run()
+    assert not app.exception
+    assert [x.value for x in dates()]==list(activity_dates(fresh,'America/New_York'))
 
 def test_save_and_check_sendgrid_uses_new_form_credentials_without_email(tmp_path,monkeypatch):
     from storage import Store
