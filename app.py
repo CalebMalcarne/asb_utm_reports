@@ -13,13 +13,14 @@ from service import pd_client,fetch_people,build,enrich,select_rows,export_parts
 from scheduler import next_run,validate_schedule
 from mailer import make_payload,report_payload,send,DeliveryUnknown,check_connection,connection_label,normalize_key
 from demo import sample,DemoAircall
+from aircall_ui import render_aircall_search,search_controls,report_search_ui
 
 UTC=timezone.utc
 st.set_page_config(page_title='ASB UTM Reports',page_icon='📊',layout='wide')
 store=Store(); settings=store.settings()
 with st.sidebar:
     st.title('ASB Reports')
-    page=st.radio('Menu',['Reports','Email & scheduling','Settings'])
+    page=st.radio('Menu',['Reports','Aircall export & search','Email & scheduling','Settings'])
     st.caption('Pipedrive → UTM groups → tags → Aircall')
     heartbeat=store.get('worker_heartbeat',0)
     st.caption('● Scheduler worker running' if time.time()-heartbeat<45 else '○ Scheduler worker offline')
@@ -139,6 +140,10 @@ if page=='Settings':
         else: st.caption('For text tag fields, available choices are discovered from the people fetched for the report.')
     st.stop()
 
+if page=='Aircall export & search':
+    render_aircall_search(settings,show_error)
+    st.stop()
+
 if page=='Reports':
     st.title('UTM performance')
     st.caption('People created in Pipedrive during your selected period, with at least one mapped UTM value. Tags reflect their current state.')
@@ -211,6 +216,15 @@ if page=='Reports':
     report=st.session_state.report
     report['meta']['name']=st.text_input('Report name',data.get('name','UTM performance report'),key='report_name_'+dataset_key)
     report['meta'].setdefault('timezone',tz)
+    transcript_options=None
+    with st.expander('Transcript keyword search & highlighted exports'):
+        search_enabled=st.checkbox('Enable transcript keyword search',False,key='report_search_enabled')
+        if search_enabled:
+            transcript_options=search_controls('report_search_'+dataset_key)
+            include_search=st.checkbox('Include phrase results and highlighted transcripts in Full report ZIP',True,key='report_search_zip')
+            st.caption('Uses only transcripts already fetched in this report. Original CSVs, TXT files, PDF, and UTM statistics stay unchanged. Use Aircall export & search for calls unrelated to this report.')
+        else:
+            include_search=False
     summary=summarize(report['rows'],report['catalog'],report['options'].get('stat_tags'))
     st.caption(f"{len(report['rows']):,} UTM people across {len(summary):,} groups. Select a tab to view and export that group.")
     if not summary:
@@ -251,7 +265,7 @@ if page=='Reports':
             x,y,z=st.columns(3)
             with x: st.download_button('Summary CSV',parts['utm_summary.csv'],filename+'_summary.csv','text/csv',key='summary_'+scope,on_click='ignore')
             with y: st.download_button('People CSV',parts['people.csv'],filename+'_people.csv','text/csv',key='people_'+scope,on_click='ignore')
-            with z: st.download_button('Full report ZIP',zip_parts(full_report_parts(report,groups)),filename+'_report.zip','application/zip',key='zip_'+scope,on_click='ignore')
+            with z: st.download_button('Full report ZIP',zip_parts(full_report_parts(report,groups,transcript_search=transcript_options if include_search else None)),filename+'_report.zip','application/zip',key='zip_'+scope,on_click='ignore')
             st.caption('Downloads include all UTM codes. Summary CSV includes a total row and a row per group; use row_type to distinguish them.' if groups is None else 'These downloads contain only this UTM group. Both CSVs include qualified/contacted counts and percentages; the ZIP also includes any fetched activity and transcripts for this group.')
             st.caption('The full ZIP includes separate all-people and matched-people CSVs, available activity for each, a UTM summary, a PDF summary, and named transcript files. Empty data files are omitted. The matching-only checkbox affects the standalone People CSV; the full ZIP always includes both datasets for this tab.')
             st.subheader('Aircall activity & transcripts')
@@ -283,6 +297,11 @@ if page=='Reports':
                     call=next(c for c in calls if c['call_id']==chosen)
                     st.text_area('Transcript',call['transcript'] or f'Transcript: {call["transcript_status"]}',height=220,disabled=True,key='transcript_text_'+scope)
                     st.download_button('Aircall activity CSV',csv_bytes([{k:v for k,v in c.items() if k!='group_key'} for c in calls]),filename+'_aircall_activity.csv','text/csv',key='activity_csv_'+scope,on_click='ignore')
+            if transcript_options is not None:
+                scoped_ids={r['person_id'] for r in filtered}
+                report_search_ui([c for c in report['calls'] if c['person_id'] in scoped_ids],
+                                 transcript_options,'report_search_'+scope,
+                                 {**report['meta'],'selected_groups':groups})
             if report['issues']:
                 with st.expander('Matching issues'): st.dataframe(pd.DataFrame([issue for issue in report['issues'] if str(issue.get('person_id','')) in {r['person_id'] for r in filtered}]),hide_index=True)
             st.caption('All call directions and durations are included. Transcript availability depends on Aircall. Shared numbers within this cohort are flagged rather than assigned to multiple people.')

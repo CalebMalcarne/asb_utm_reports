@@ -251,3 +251,91 @@ Tests cover UTM selection and denominators, native/custom tag parsing, person-cr
 - SendGrid Mail Send: https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send
 - SendGrid limits: https://www.twilio.com/docs/sendgrid/api-reference/mail-send
 
+
+
+## Aircall-only keyword search and exports (Python app)
+
+Open **Aircall export & search** in the sidebar. This workflow requires only the
+Aircall credentials in Settings; it does not use Pipedrive, UTM codes, or the
+people loaded in Reports. The original report-level Aircall controls remain.
+
+1. Refresh Aircall tags, then optionally select tag IDs. Choose any selected tag,
+   all selected tags, or without any of the selected tags. Blank selection means
+   every call, including untagged calls.
+2. Select a day/week/month preset or custom inclusive dates in the configured
+   timezone. Click **Fetch Aircall calls**. Call pages are retrieved first; tag
+   filtering is local, so any/all/exclusion rules have consistent semantics.
+3. Optionally fetch transcripts with the calls. The default batch requests 100
+   transcripts, adjustable from 1 to 1000. Use **Fetch next transcript batch**
+   until no calls remain pending. Network/rate-limit failures preserve completed
+   transcript work and leave the failed call and later calls resumable.
+4. Enter one literal keyword or phrase per line. Select any/all phrases,
+   case-sensitive matching, and whole-word/phrase boundaries. Whitespace is
+   flexible; punctuation is literal. No regex or semantic/AI classification is
+   used. Editing search text only re-searches loaded transcripts.
+5. Show matching calls only or all calls with their search status. Preview the
+   full transcript with yellow highlights. Export all displayed calls or choose
+   specific displayed calls.
+
+The independent export ZIP can contain:
+
+- `Aircall_Activity.csv`: selected call details, transcript/search statuses,
+  matched phrases, occurrence counts, and up to five contextual excerpts.
+- `transcripts/First_Last_<CALL ID>.txt`: original available transcripts.
+- `highlighted_transcripts/First_Last_<CALL ID>.html`: full matching transcripts
+  with every occurrence highlighted, plus call identity and search settings.
+  Open these files offline in a browser. TXT/CSV cannot store colored highlights.
+- `Transcript_matches.csv`: matching-call summary when highlighted exports are
+  enabled and matches exist.
+- JSON search settings and coverage counts, always included even with no matches.
+
+Empty data files are omitted. Aircall contact names are used when available,
+otherwise an unknown-contact filename with the call ID is used. These names
+are not asserted to be matched Pipedrive identities. Filenames are sanitized;
+HTML source text is escaped, has no JavaScript or external resources, and CSV
+cells retain the existing spreadsheet-formula protections.
+
+### Search coverage and date limits
+
+Search covers only available, nonblank transcripts. Unavailable, forbidden,
+empty, and not-yet-requested transcripts are **not negative matches**. Coverage
+counts and the remaining pending requests are displayed and exported. A blank
+query exports calls without requiring a transcript. Re-fetch calls to refresh
+their tags or retry transcripts previously marked unavailable/forbidden/empty.
+Changing the date/tag controls does not relabel previously loaded results; the
+loaded snapshot remains explicit until a successful replacement fetch.
+
+The existing Aircall six-month history restriction, throttling, pagination, and
+recursive splitting of dense call windows apply. The API date query uses its
+call creation window, with returned records additionally checked against their
+call start timestamp. Current-day retrieval stops at fetch time. Large ranges
+can take several minutes and consume substantial memory in Streamlit; start
+with a day or week. Closing the session loses in-memory results, so export work
+you want to keep. No calls, tags, or transcripts are modified on Aircall.
+
+### Include phrase results in a UTM report
+
+In **Reports**, expand **Transcript keyword search & highlighted exports** and
+enable keyword search. Enter phrases, then check **Include phrase results and
+highlighted transcripts in Full report ZIP**. Each UTM tab searches only its
+already-fetched calls; All UTM codes searches every fetched call in that report.
+The extra match CSV, HTML transcripts, and search metadata are added to that
+tab's full ZIP. A separate matching-transcripts ZIP is also available.
+
+This does not change UTM denominators, qualified/contacted counts, the existing
+all/matching people and activity CSVs, the overall PDF, or original TXT files.
+It does not automatically fetch more calls. Email/scheduled attachments and
+Cloudflare code are unchanged. No login system is added.
+
+### Regression checks for this feature
+
+Run the existing Python suite plus the new search tests before deploying:
+
+`python -m pytest -q`
+
+Tests include literal phrase matching, any/all and negative tag rules,
+case/word boundaries, missing transcript coverage, HTML escaping/overlaps,
+safe CSV cells, scoped ZIPs, resumable batches, pagination, and Streamlit demo
+navigation. Development dependencies remain pytest and pypdf alongside
+requirements.txt. This feature branch was prepared without an available
+execution workspace; these new tests have not yet been run.

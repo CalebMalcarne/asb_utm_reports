@@ -141,7 +141,7 @@ def transcript_filename(call,person):
     return f'transcripts/{name}_{call_id}.txt'
 
 
-def full_report_parts(report,groups=None,created_at=None):
+def full_report_parts(report,groups=None,created_at=None,transcript_search=None):
     """A full bundle always contains both all-people and matched-only datasets.
 
     The on-screen matching-only checkbox is deliberately not an argument: it
@@ -168,5 +168,9 @@ def full_report_parts(report,groups=None,created_at=None):
         if str(call.get('transcript') or '').strip():
             name=transcript_filename(call,by_id[call['person_id']])
             parts[name]=call['transcript'].encode('utf-8')
+    if transcript_search is not None:
+        from transcript_search import search_export_parts
+        parts.update(search_export_parts(calls,transcript_search,
+                     {**report['meta'],'selected_groups':groups,'scope':'Fetched calls for this UTM export'}))
     return parts
 

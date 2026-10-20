@@ -95,3 +95,18 @@ def test_activity_defaults_handle_dst_day_length():
     assert activity_dates(meta,'America/New_York')==(date(2026,3,8),date(2026,3,8))
     start,end=activity_window(meta,'America/New_York',*activity_dates(meta,'America/New_York'))
     assert (end-start).total_seconds()==23*3600
+
+
+def test_optional_phrase_exports_preserve_standard_files_and_utm_scope():
+    from transcript_search import search_options
+    report=populated()
+    key=report['rows'][4]['group_key']
+    baseline=full_report_parts(report,[key])
+    parts=full_report_parts(report,[key],transcript_search=search_options('synthetic example'))
+    for name in baseline:
+        if name!='Overall Summary.pdf': assert parts[name]==baseline[name]
+    assert {r['person_id'] for r in rows(parts['Transcript_matches.csv'])}=={'5'}
+    html_names=[name for name in parts if name.startswith('highlighted_transcripts/')]
+    assert html_names==['highlighted_transcripts/Example_Person_5_905.html']
+    assert '<mark>synthetic example</mark>' in parts[html_names[0]].decode()
+    assert not any(name.startswith('highlighted_transcripts/') for name in baseline)

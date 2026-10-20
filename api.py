@@ -1,5 +1,6 @@
 """Read-only CRM/phone clients. Secrets never appear in error strings."""
 import re
+import math
 import time
 import requests
 
@@ -125,8 +126,28 @@ class Aircall(Client):
         super().__init__('https://api.aircall.io/v1/', auth=(api_id,token), progress=progress)
 
     def search_page(self, number, lo, hi, page=1):
-        return self.get('calls/search', {'phone_number':number,'from':lo,'to':hi,'page':page,
-                                       'per_page':self.PAGE_SIZE,'order':'asc'})
+        params = {'from':lo,'to':hi,'page':page,'per_page':self.PAGE_SIZE,'order':'asc'}
+        if number:
+            params['phone_number'] = number
+        else:
+            params['fetch_contact'] = 'true'
+        return self.get('calls/search', params)
+
+    def tags(self):
+        result, page = {}, 1
+        while True:
+            data = self.get('tags', {'page':page,'per_page':self.PAGE_SIZE})
+            rows = data.get('tags') or []
+            if not isinstance(rows, list):
+                raise APIError('Unexpected Aircall tag response.')
+            before = len(result)
+            for tag in rows:
+                result[str(tag['id'])] = tag
+            if not (data.get('meta') or {}).get('next_page_link'):
+                return list(result.values())
+            if len(result) == before:
+                raise APIError('Aircall tag pagination did not advance; retry.')
+            page += 1
 
     def calls(self, number, start, end):
         result = {}
@@ -152,7 +173,7 @@ class Aircall(Client):
                 split(lo,hi); return
             if total is not None and len(rows)<int(total): raise APIError('Aircall pagination/count changed; retry the import.')
             result.update({str(c['id']):c for c in rows})
-        if start<end: visit(int(start),int(end)-1)
+        if start<end: visit(int(start),math.ceil(end)-1)
         return list(result.values())
 
     def transcript(self, call_id):

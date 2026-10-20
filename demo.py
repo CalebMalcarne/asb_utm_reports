@@ -24,3 +24,28 @@ class DemoAircall:
                  'direction':'outbound','user':{'name':'Example Rep'},'tags':[{'name':'Contacted'}],'comments':[]}]
     def transcript(self,call_id):
         return {'status':'available','text':'[0] internal: This is a synthetic example call.\n[5] external: Please send me the information.','raw':None}
+
+
+class DemoAircallSearch(DemoAircall):
+    """Independent demo so the original person-based example remains unchanged."""
+    def tags(self):
+        return [{'id':1,'name':'Qualified'}, {'id':2,'name':'Contacted'}, {'id':3,'name':'No Answer'}]
+
+    def calls(self,number,start,end):
+        rows=[]
+        for i in range(1,6):
+            t=int(start)+(int(end)-int(start))*i//6
+            tags=[self.tags()[0],self.tags()[1]] if i<3 else ([self.tags()[1]] if i<5 else [])
+            rows.append({'id':900+i,'raw_digits':f'+1202555010{i}','started_at':t,
+                         'answered_at':t+5 if i<5 else None,'ended_at':t+125,'duration':125,
+                         'direction':'inbound' if i%2 else 'outbound',
+                         'contact':{'id':i,'first_name':'Demo','last_name':f'Contact {i}'},
+                         'user':{'name':'Example Rep'},'tags':tags,'comments':[]})
+        return rows
+
+    def transcript(self,call_id):
+        if str(call_id)=='905':
+            return {'status':'unavailable','text':'','raw':None}
+        text=('[0] internal: How can I help you?\n[5] external: I would like retirement protection. Please send me information.'
+              if int(call_id)%2 else '[0] external: Please call me tomorrow about my account.')
+        return {'status':'available','text':text,'raw':None}
