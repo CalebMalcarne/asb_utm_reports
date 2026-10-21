@@ -337,5 +337,7 @@ Tests include literal phrase matching, any/all and negative tag rules,
 case/word boundaries, missing transcript coverage, HTML escaping/overlaps,
 safe CSV cells, scoped ZIPs, resumable batches, pagination, and Streamlit demo
 navigation. Development dependencies remain pytest and pypdf alongside
-requirements.txt. This feature branch was prepared without an available
-execution workspace; these new tests have not yet been run.
+requirements.txt. Verified on October 21, 2026 with Python 3.12.14 and
+Streamlit 1.66.0: all 79 tests passed, including the 15 new Aircall search
+regressions and the existing report, PDF, email, and scheduling tests. API and
+email tests use mocks; verification does not send live emails or fetch client data.
