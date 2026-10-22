@@ -344,6 +344,28 @@ email tests use mocks; verification does not send live emails or fetch client da
 
 ## Readable dates and Speed to Lead
 
+### After-hours leads
+
+All UTM people tables and People CSV exports include **After-hours lead**,
+**Next workday start**, and **Response after opening**. Business hours default to
+9:00 AM–5:00 PM Monday–Friday, America/New_York. Change the days, opening/closing
+times, or timezone under **Settings → Business hours**. The active schedule is
+shown above each people table and included in each exported person row.
+
+Before 9:00 AM, at/after 5:00 PM, and closed-day arrivals are after hours. Their
+response is measured from the next scheduled opening to their first outbound
+Aircall attempt. For example, a Friday-evening lead called Monday at 9:05 AM has
+a five-minute response after opening. A call made before that opening is labeled
+**Called before opening** (zero late seconds). Unknown or pending first-call times
+retain their status rather than becoming zero. The original creation-to-call Speed
+to Lead remains available alongside this additional measure. Both duration cells
+use green ≤5 minutes, yellow >5 through 10 minutes, and red >10 minutes.
+
+The opening date skips closed weekdays and uses local daylight-saving rules;
+after opening, the response is elapsed clock time, not accumulated working hours.
+This is a recurring weekly schedule; holidays are not excluded automatically.
+Changing business hours recalculates existing results without extra Aircall calls.
+
 Table timestamps use `MM/DD/YYYY hh:mm:ssAM/PM`, for example
 `10/22/2026 12:00:00AM`, in the report timezone selected in Settings. This applies
 to person and call tables, transcript search results, email history, and CSV/PDF
@@ -386,8 +408,9 @@ and the color category (CSV does not store cell colors). The PDF's contact table
 also includes the duration/category and first-call time. Both all-UTM and individual
 UTM tabs use the same calculation, independent of the matching-only detail filter.
 
-Verified October 22, 2026: 105 Python tests passed, including threshold boundaries,
+Verified October 22, 2026: 121 Python tests passed, including threshold boundaries,
 daylight-saving elapsed time, incomplete history, timestamp exports, Streamlit
 tables, background loading, independent matching filters, and metadata-only call
-lookups. The PDF summary was rendered and visually checked with synthetic data.
+lookups, after-hours arrivals, next-workday openings, and business-hours settings.
+The PDF summary was rendered and visually checked with synthetic data.
 

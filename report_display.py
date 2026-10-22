@@ -5,7 +5,7 @@ from core import parse_dt
 DATE_FORMAT = '%m/%d/%Y %I:%M:%S%p'
 DATE_COLUMNS = {'created_at', 'started_at', 'answered_at', 'ended_at', 'first_called_at',
                 'activity_start', 'activity_end', 'fetched_at', 'aircall_fetched_at',
-                'created', 'updated', 'next_run'}
+                'created', 'updated', 'next_run', 'next_workday_start'}
 SPEED_COLORS = {'Green': ('#15803d', '#ffffff'),
                 'Yellow': ('#fef08a', '#172338'), 'Red': ('#b91c1c', '#ffffff')}
 
@@ -67,9 +67,18 @@ def people_table(rows, zone='UTC'):
     frame = pd.DataFrame(table_rows(rows, zone))
     if frame.empty or 'speed_to_lead' not in frame:
         return frame
-    front = [k for k in ('person_id','name','created_at','first_called_at','speed_to_lead') if k in frame]
+    front = [k for k in ('person_id','name','created_at','after_hours_lead','first_called_at','speed_to_lead',
+                        'next_workday_start','after_hours_response') if k in frame]
     frame = frame[front+[k for k in frame if k not in front]]
     def shade(row):
-        background, foreground = SPEED_COLORS.get(row.get('speed_to_lead_color'), ('#e5e7eb', '#172338'))
-        return [f'background-color: {background}; color: {foreground}' if k == 'speed_to_lead' else '' for k in row.index]
+        styles=[]
+        for key in row.index:
+            color_key={'speed_to_lead':'speed_to_lead_color','after_hours_response':'after_hours_response_color'}.get(key)
+            if color_key:
+                background,foreground=SPEED_COLORS.get(row.get(color_key),('#e5e7eb','#172338'))
+                styles.append(f'background-color: {background}; color: {foreground}')
+            elif key=='after_hours_lead' and row[key]=='Yes':
+                styles.append('background-color: #dbeafe; color: #1e3a8a; font-weight: bold')
+            else: styles.append('')
+        return styles
     return frame.style.apply(shade, axis=1)

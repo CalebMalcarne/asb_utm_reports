@@ -7,10 +7,11 @@ import uuid
 from pathlib import Path
 from contextlib import contextmanager
 from cryptography.fernet import Fernet
+from business_hours import DEFAULT_HOURS
 
 DEFAULTS={'company':'','pipedrive_token':'','aircall_id':'','aircall_token':'','sendgrid_key':'',
           'sender_email':'','sender_name':'ASB Reports','sendgrid_region':'US','timezone':'America/New_York',
-          'utm_fields':{},'tag_field':'label_ids'}
+          'utm_fields':{},'tag_field':'label_ids','business_hours':DEFAULT_HOURS}
 class Store:
     def __init__(self,path=None):
         self.path=Path(path or os.getenv('ASB_REPORTS_DATA_DIR') or Path(__file__).parent/'.data').resolve()
@@ -84,3 +85,4 @@ class Store:
         with self.connect() as db: db.execute('UPDATE jobs SET status=?,detail=?,updated=? WHERE id=?',(status,detail,time.time(),jid))
     def jobs(self):
         with self.connect() as db: return [dict(r) for r in db.execute('SELECT * FROM jobs ORDER BY created DESC LIMIT 100')]
+

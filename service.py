@@ -29,7 +29,8 @@ def fetch_people(settings,options,start,end,progress=None):
     people=pd.people(start,end,codes)
     return {'fields':fields,'people':people,'start':start.isoformat(),'end':end.isoformat(),
             'fetched_at':datetime.now(timezone.utc).isoformat(),'options':copy.deepcopy(options),'demo':False,
-            'company':pd.company,'timezone':settings.get('timezone','UTC')}
+            'company':pd.company,'timezone':settings.get('timezone','UTC'),
+            'business_hours':copy.deepcopy(settings.get('business_hours'))}
 
 def build(data,options):
     options=copy.deepcopy(options)
@@ -43,14 +44,19 @@ def build(data,options):
     for t in unknown: catalog[t]=t.removeprefix('text:')
     return {'rows':rows,'calls':[],'issues':[], 'catalog':catalog, 'invalid_dates':invalid,
             'meta':{**{k:data[k] for k in ('start','end','fetched_at','demo')},
-                    **{k:data[k] for k in ('name','company','timezone') if k in data}},'options':copy.deepcopy(options)}
+                    **{k:data[k] for k in ('name','company','timezone','business_hours') if k in data}},'options':copy.deepcopy(options)}
 
 def select_rows(report,groups=None,matched_only=False):
     from report_display import speed_to_lead
+    from business_hours import after_hours_details
     by_person=defaultdict(list)
     for call in report['calls']: by_person[str(call['person_id'])].append(call)
-    return [{**r,**(report.get('speed_results',{}).get(r['person_id']) or speed_to_lead(r,by_person[str(r['person_id'])]))} for r in report['rows']
-            if (groups is None or r['group_key'] in groups) and (not matched_only or r['matches_tag'])]
+    rows=[]
+    for row in report['rows']:
+        if (groups is not None and row['group_key'] not in groups) or (matched_only and not row['matches_tag']): continue
+        speed=report.get('speed_results',{}).get(row['person_id']) or speed_to_lead(row,by_person[str(row['person_id'])])
+        rows.append({**row,**speed,**after_hours_details(row,speed,report['meta'].get('business_hours'))})
+    return rows
 
 def enrich(report,settings,person_ids,start,end,transcripts=True,progress=None,client=None):
     """All phone numbers on selected people; shared numbers in cohort flagged, never guessed."""
