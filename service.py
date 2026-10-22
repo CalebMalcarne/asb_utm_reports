@@ -49,7 +49,7 @@ def select_rows(report,groups=None,matched_only=False):
     from report_display import speed_to_lead
     by_person=defaultdict(list)
     for call in report['calls']: by_person[str(call['person_id'])].append(call)
-    return [{**r,**speed_to_lead(r,by_person[str(r['person_id'])])} for r in report['rows']
+    return [{**r,**(report.get('speed_results',{}).get(r['person_id']) or speed_to_lead(r,by_person[str(r['person_id'])]))} for r in report['rows']
             if (groups is None or r['group_key'] in groups) and (not matched_only or r['matches_tag'])]
 
 def enrich(report,settings,person_ids,start,end,transcripts=True,progress=None,client=None):

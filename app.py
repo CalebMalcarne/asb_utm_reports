@@ -15,6 +15,7 @@ from mailer import make_payload,report_payload,send,DeliveryUnknown,check_connec
 from demo import sample,DemoAircall
 from aircall_ui import render_aircall_search,search_controls,report_search_ui
 from report_display import format_timestamp,table_rows,people_table
+from speed_lookup import SpeedLookup,lookup_key,pending_result
 
 UTC=timezone.utc
 st.set_page_config(page_title='ASB UTM Reports',page_icon='📊',layout='wide')
@@ -28,6 +29,8 @@ with st.sidebar:
     if st.button('Load demo',width='stretch'):
         st.session_state.data=sample(); st.session_state.pop('report',None); st.session_state.pop('options_key',None)
     if st.button('Clear report',width='stretch'):
+        lookup=st.session_state.pop('speed_lookup',None)
+        if lookup: lookup.cancelled.set()
         for k in ['data','report','options_key']: st.session_state.pop(k,None)
         st.rerun()
 
@@ -217,6 +220,25 @@ if page=='Reports':
     report=st.session_state.report
     report['meta']['name']=st.text_input('Report name',data.get('name','UTM performance report'),key='report_name_'+dataset_key)
     report['meta']['timezone']=tz
+    speed_key=lookup_key(report,settings)
+    lookup=st.session_state.get('speed_lookup')
+    if st.session_state.get('speed_lookup_key')!=speed_key:
+        if lookup: lookup.cancelled.set()
+        lookup=None
+        if data['demo'] or (settings.get('aircall_id') and settings.get('aircall_token')):
+            lookup=SpeedLookup(report,settings,DemoAircall() if data['demo'] else None)
+        st.session_state.speed_lookup=lookup
+        st.session_state.speed_lookup_key=speed_key
+    speed_results,speed_done=lookup.snapshot() if lookup else ({},True)
+    report['speed_results']={r['person_id']:speed_results.get(r['person_id'],pending_result(
+        'Loading…' if lookup else 'Set Aircall credentials in Settings')) for r in report['rows']}
+    if lookup:
+        st.caption(f"Speed to Lead: {len(speed_results)}/{len(report['rows'])} checked · call times only · through {format_timestamp(lookup.end,tz)}")
+        if speed_done and st.button('Refresh Speed to Lead',help='Retry failed lookups or check for newer calls.'):
+            st.session_state.pop('speed_lookup_key',None)
+            st.rerun()
+    else:
+        st.info('Add your Aircall API ID and token in Settings to load Speed to Lead automatically.')
     transcript_options=None
     with st.expander('Transcript keyword search & highlighted exports'):
         search_enabled=st.checkbox('Enable transcript keyword search',False,key='report_search_enabled')
@@ -257,10 +279,12 @@ if page=='Reports':
             if groups is None:
                 st.subheader('UTM group comparison')
                 st.dataframe(pd.DataFrame([{k:v for k,v in r.items() if k!='group_key'} for r in summary]),hide_index=True,width='stretch')
-            only=st.checkbox('Show/export only people matching the selected tags',False,key='only_'+scope)
+            only=st.checkbox('Only Show Matches',False,key='only_'+scope,
+                             help='Show only people matching the Report tags and match rule above. Also filters the People CSV. Each UTM tab keeps its own selection.')
             detail=select_rows(report,groups,only)
             st.subheader('Data sheet')
-            st.caption('Times: '+tz+' · Speed to Lead: creation to first outbound attempt (answered or unanswered). Green ≤5 min; yellow >5 through 10 min; red >10 min. Gray means no verified first attempt in the fetched history.')
+            st.caption(f"Showing {len(detail):,} of {len(filtered):,} people")
+            st.caption('Times: '+tz+' · Speed to Lead loads automatically: creation to first outbound attempt (answered or unanswered), through the lookup time. Green ≤5 min; yellow >5 through 10 min; red >10 min. Gray means loading or no verified first attempt. Transcripts are fetched separately below.')
             st.dataframe(people_table(public_rows(detail),tz),hide_index=True,width='stretch',
                          column_config={'speed_to_lead':'Speed to Lead','first_called_at':'First called',
                                         'speed_to_lead_color':'Speed category','speed_to_lead_status':'Speed status'})
@@ -309,6 +333,16 @@ if page=='Reports':
             if report['issues']:
                 with st.expander('Matching issues'): st.dataframe(pd.DataFrame([issue for issue in report['issues'] if str(issue.get('person_id','')) in {r['person_id'] for r in filtered}]),hide_index=True)
             st.caption('All call directions and durations are included. Transcript availability depends on Aircall. Shared numbers within this cohort are flagged rather than assigned to multiple people.')
+    # Start only after tables have been sent to the browser. Poll without blocking
+    # the UI; the worker owns copies and cannot overwrite manual activity pulls.
+    if lookup and not speed_done:
+        lookup.start()
+        @st.fragment(run_every=2)
+        def speed_progress():
+            current,done=lookup.snapshot()
+            if len(current)!=len(speed_results) or done!=speed_done:
+                st.rerun()
+        speed_progress()
     st.stop()
 
 # Email & scheduling
