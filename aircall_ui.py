@@ -11,6 +11,7 @@ from service import zip_parts
 from transcript_search import (search_options, analyze_calls, coverage, result_rows,
                                highlighted_body, search_export_parts)
 from aircall_search import TAG_RULES, fetch_calls, fetch_transcript_batch, export_search
+from report_display import table_rows
 
 
 def search_controls(prefix):
@@ -34,7 +35,7 @@ def search_controls(prefix):
         return None
 
 
-def show_results(calls, options, prefix, matching_only=True):
+def show_results(calls, options, prefix, matching_only=True, zone='UTC'):
     evaluated = analyze_calls(calls, options)
     if not options['terms']:
         st.info('No phrases entered: no text filter is applied. Add a keyword or phrase to search.')
@@ -47,7 +48,8 @@ def show_results(calls, options, prefix, matching_only=True):
         st.warning(f'{stats["not_searchable"]} calls do not have searchable transcripts. They are not counted as negative matches.')
     st.caption('Transcript status counts: '+', '.join(f'{k}: {v}' for k, v in stats['transcript_statuses'].items()))
     visible = [x for x in evaluated if not options['terms'] or not matching_only or x['search_status'] == 'match']
-    st.dataframe(pd.DataFrame(result_rows(visible)), hide_index=True, width='stretch')
+    st.caption('Times: '+zone)
+    st.dataframe(pd.DataFrame(table_rows(result_rows(visible),zone)), hide_index=True, width='stretch')
     if not visible:
         st.info('No calls match this view. Check transcript coverage before drawing conclusions.')
         return evaluated, visible
@@ -71,7 +73,7 @@ def report_search_ui(calls, options, prefix, metadata):
     st.subheader('Transcript keyword & phrase results')
     st.caption('Search covers fetched calls for this UTM tab only. It does not change person/tag statistics or the standard full-report files.')
     only = st.checkbox('Show phrase matches only', True, key=prefix+'_matching')
-    show_results(calls, options, prefix, only)
+    show_results(calls, options, prefix, only, metadata.get('timezone','UTC'))
     if options['terms']:
         parts = search_export_parts(calls, options, metadata)
         if 'Transcript_matches.csv' in parts:
@@ -178,7 +180,7 @@ def render_aircall_search(settings, show_error):
         return
     matching_only = st.checkbox('Show/export phrase matches only', True, key='ac_only',
                                disabled=not options['terms'])
-    _, visible = show_results(dataset['calls'], options, 'ac_results', matching_only)
+    _, visible = show_results(dataset['calls'], options, 'ac_results', matching_only, meta['timezone'])
     st.subheader('Export options')
     include_text = st.checkbox('Include original transcript TXT files', True, key='ac_export_text')
     include_highlights = st.checkbox('Include highlighted transcript HTML files', True,
@@ -206,3 +208,4 @@ def render_aircall_search(settings, show_error):
     if st.button('Clear Aircall search data', key='ac_clear'):
         st.session_state.pop('ac_dataset', None)
         st.rerun()
+

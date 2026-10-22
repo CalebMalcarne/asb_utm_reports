@@ -141,7 +141,7 @@ def search_export_parts(calls, options, metadata=None):
     matched = [x for x in evaluated if x['search_status'] == 'match']
     parts = {}
     if matched:
-        parts['Transcript_matches.csv'] = csv_bytes(result_rows(matched))
+        parts['Transcript_matches.csv'] = csv_bytes(result_rows(matched),zone=(metadata or {}).get('timezone','UTC'))
         for item in matched:
             call = item['call']
             path = transcript_filename(call, call).replace('transcripts/', 'highlighted_transcripts/', 1)
@@ -151,3 +151,4 @@ def search_export_parts(calls, options, metadata=None):
                     note='Only available, nonblank transcripts were searched. Missing or unrequested transcripts are not negative results. Phrases are literal; whitespace is flexible. Excerpts show the first five occurrences; HTML contains all highlights.')
     parts['Transcript_search_settings.json'] = json.dumps(settings, indent=2, ensure_ascii=False).encode('utf-8')
     return parts
+

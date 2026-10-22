@@ -14,6 +14,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, LongTable
 from core import UTMS, parse_dt, statistic_tags, summarize, summarize_all
+from report_display import format_timestamp
 
 
 def overall_summary_pdf(report, cohort, groups=None, created_at=None):
@@ -38,7 +39,7 @@ def overall_summary_pdf(report, cohort, groups=None, created_at=None):
     zone=meta.get('timezone','UTC')
     def stamp(value):
         dt=parse_dt(value)
-        return dt.astimezone(ZoneInfo(zone)).strftime('%Y-%m-%d %H:%M:%S %Z') if dt else 'Not recorded'
+        return format_timestamp(value,zone) if dt else 'Not recorded'
     def labels(tokens): return ', '.join(f'{catalog.get(t,t)} [{t}]' for t in tokens) or 'None selected'
     stat_tags=statistic_tags(catalog,opts.get('stat_tags'))
     total=summarize_all(cohort,catalog,stat_tags)
@@ -58,6 +59,7 @@ def overall_summary_pdf(report, cohort, groups=None, created_at=None):
         ('Report created / Pipedrive fetched',stamp(meta.get('fetched_at'))),
         ('PDF exported',stamp(created_at.isoformat())),
         ('Pipedrive company',meta.get('company') or 'Not recorded'),
+        ('Report timezone',zone),
         ('Grouping fields',', '.join(opts.get('group_by',[]))),
         ('Searched tags / matching rule',labels(opts.get('tags',[]))+' / '+opts.get('tag_rule','Any selected tag')),
         ('Qualified statistic tags',labels(stat_tags['qualified'])),
@@ -104,7 +106,10 @@ def overall_summary_pdf(report, cohort, groups=None, created_at=None):
             tags=set(r['tag_tokens'])
             flags=[label for condition,label in [(bool(tags & qualified),'Qualified'),(r['matches_tag'],'Matched'),(bool(tags & contacted),'Contacted')] if condition]
             rows.append([f"{r['name']}\nPerson ID: {r['person_id']}\nCreated: {stamp(r['created_at'])}",
-                         '\n'.join(r['phones']+r['emails']) or 'Not provided',
+                         ('\n'.join(r['phones']+r['emails']) or 'Not provided')+
+                         '\nSpeed to Lead: '+r.get('speed_to_lead','Not fetched')+
+                         (' ('+r['speed_to_lead_color']+')' if r.get('speed_to_lead_color') else '')+
+                         ('\nFirst called: '+stamp(r['first_called_at']) if r.get('first_called_at') else ''),
                          '\n'.join(f'{u}: {r[u]}' for u in UTMS if r.get(u)),
                          '\n'.join(r['tags']) or 'None',', '.join(flags)])
         story.append(tabular(['Person','Contact details','UTM values','Pipedrive tags','Included as'],rows,[145,155,usable-480,100,80]))
@@ -114,7 +119,8 @@ def overall_summary_pdf(report, cohort, groups=None, created_at=None):
         for i in issues: story.append(p(f"Person {i.get('person_id','')}: {i.get('issue','Review activity matching')}",'SmallCopy'))
     def footer(canvas,document):
         canvas.saveState(); canvas.setFont('ASBVera',7); canvas.setFillColor(muted)
-        canvas.drawString(36,19,'ASB Reports | '+created_at.astimezone(ZoneInfo(zone)).strftime('%Y-%m-%d'))
+        canvas.drawString(36,19,'ASB Reports | '+created_at.astimezone(ZoneInfo(zone)).strftime('%m/%d/%Y'))
         canvas.drawRightString(width-36,19,f'Page {document.page}'); canvas.restoreState()
     doc.build(story,onFirstPage=footer,onLaterPages=footer)
     return output.getvalue()
+

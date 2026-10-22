@@ -53,7 +53,7 @@ def test_pdf_identifies_report_tags_dates_percentages_and_qualified_or_matching_
     report=build(data,data['options'])
     report['meta'].update(name='Named campaign report',company='company-example',timezone='America/New_York')
     text=pdf_text(full_report_parts(report,created_at=datetime(2026,10,20,12,tzinfo=timezone.utc))['Overall Summary.pdf'])
-    for value in ['Named campaign report','company-example','2026-10-20','Contacted [id:3]','60.00%','20.00%',
+    for value in ['Named campaign report','company-example','10/20/2026','Contacted [id:3]','60.00%','20.00%',
                   'Qualified or matching people (4)','Example Person 1','Example Person 2','Example Person 3','Example Person 4','AFLT2421']:
         assert value in text
     assert 'Example Person 5' not in text
@@ -110,3 +110,4 @@ def test_optional_phrase_exports_preserve_standard_files_and_utm_scope():
     assert html_names==['highlighted_transcripts/Example_Person_5_905.html']
     assert '<mark>synthetic example</mark>' in parts[html_names[0]].decode()
     assert not any(name.startswith('highlighted_transcripts/') for name in baseline)
+

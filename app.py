@@ -14,6 +14,7 @@ from scheduler import next_run,validate_schedule
 from mailer import make_payload,report_payload,send,DeliveryUnknown,check_connection,connection_label,normalize_key
 from demo import sample,DemoAircall
 from aircall_ui import render_aircall_search,search_controls,report_search_ui
+from report_display import format_timestamp,table_rows,people_table
 
 UTC=timezone.utc
 st.set_page_config(page_title='ASB UTM Reports',page_icon='📊',layout='wide')
@@ -215,7 +216,7 @@ if page=='Reports':
         except Exception as exc: show_error(exc); st.stop()
     report=st.session_state.report
     report['meta']['name']=st.text_input('Report name',data.get('name','UTM performance report'),key='report_name_'+dataset_key)
-    report['meta'].setdefault('timezone',tz)
+    report['meta']['timezone']=tz
     transcript_options=None
     with st.expander('Transcript keyword search & highlighted exports'):
         search_enabled=st.checkbox('Enable transcript keyword search',False,key='report_search_enabled')
@@ -259,7 +260,10 @@ if page=='Reports':
             only=st.checkbox('Show/export only people matching the selected tags',False,key='only_'+scope)
             detail=select_rows(report,groups,only)
             st.subheader('Data sheet')
-            st.dataframe(pd.DataFrame(public_rows(detail)),hide_index=True,width='stretch')
+            st.caption('Times: '+tz+' · Speed to Lead: creation to first outbound attempt (answered or unanswered). Green ≤5 min; yellow >5 through 10 min; red >10 min. Gray means no verified first attempt in the fetched history.')
+            st.dataframe(people_table(public_rows(detail),tz),hide_index=True,width='stretch',
+                         column_config={'speed_to_lead':'Speed to Lead','first_called_at':'First called',
+                                        'speed_to_lead_color':'Speed category','speed_to_lead_status':'Speed status'})
             if not detail: st.info('No people match this detail filter. Group statistics still use all people in this tab.')
             parts=export_parts(report,groups,only)
             x,y,z=st.columns(3)
@@ -291,12 +295,12 @@ if page=='Reports':
             if report['calls']:
                 display_ids={r['person_id'] for r in filtered}
                 calls=[c for c in report['calls'] if c['person_id'] in display_ids]
-                st.dataframe(pd.DataFrame([{k:v for k,v in c.items() if k not in ('transcript','group_key')} for c in calls]),hide_index=True,width='stretch')
+                st.dataframe(pd.DataFrame(table_rows([{k:v for k,v in c.items() if k not in ('transcript','group_key')} for c in calls],tz)),hide_index=True,width='stretch')
                 if calls:
                     chosen=st.selectbox('Read a transcript',[c['call_id'] for c in calls],key='read_'+scope)
                     call=next(c for c in calls if c['call_id']==chosen)
                     st.text_area('Transcript',call['transcript'] or f'Transcript: {call["transcript_status"]}',height=220,disabled=True,key='transcript_text_'+scope)
-                    st.download_button('Aircall activity CSV',csv_bytes([{k:v for k,v in c.items() if k!='group_key'} for c in calls]),filename+'_aircall_activity.csv','text/csv',key='activity_csv_'+scope,on_click='ignore')
+                    st.download_button('Aircall activity CSV',csv_bytes([{k:v for k,v in c.items() if k!='group_key'} for c in calls],zone=tz),filename+'_aircall_activity.csv','text/csv',key='activity_csv_'+scope,on_click='ignore')
             if transcript_options is not None:
                 scoped_ids={r['person_id'] for r in filtered}
                 report_search_ui([c for c in report['calls'] if c['person_id'] in scoped_ids],
@@ -351,7 +355,7 @@ with schedules:
     if existing:
         for s in existing:
             with st.expander(s['name']+(' · enabled' if s['enabled'] else ' · paused')):
-                st.write(f"Next: {datetime.fromtimestamp(s['next_run'],ZoneInfo(s['spec']['timezone'])).isoformat()}")
+                st.write('Next: '+format_timestamp(s['next_run'],s['spec']['timezone'])+' · '+s['spec']['timezone'])
                 st.write(f"{s['spec']['frequency']} · report {s['spec']['period']} · recipients: {s['spec']['recipients']}")
                 st.json(s['spec'],expanded=False)
                 a,b=st.columns(2)
@@ -399,7 +403,7 @@ with schedules:
               'anchor':saved_spec.get('anchor',time.time()),'period':report_period,'days':int(days),'recipients':to,
               'options':copy.deepcopy(report['options']),'groups':groups,'matched_only':only,'include_details':details,
               'include_calls':calls,'include_transcripts':transcripts and calls,'followup':followup}
-        st.write('Next scheduled run: '+datetime.fromtimestamp(next_run(spec,time.time()),ZoneInfo(tz)).isoformat())
+        st.write('Next scheduled run: '+format_timestamp(next_run(spec,time.time()),tz)+' · '+tz)
         if st.button('Save schedule',type='primary'):
             try:
                 if not name.strip(): raise ValueError('Enter a schedule name.')
@@ -410,9 +414,9 @@ with schedules:
 with history:
     jobs=store.jobs()
     if jobs:
-        for j in jobs:
-            j['created']=datetime.fromtimestamp(j['created'],UTC).isoformat(); j['updated']=datetime.fromtimestamp(j['updated'],UTC).isoformat()
-        st.dataframe(pd.DataFrame(jobs),hide_index=True,width='stretch')
+        st.caption('Times: '+settings['timezone'])
+        st.dataframe(pd.DataFrame(table_rows(jobs,settings['timezone'])),hide_index=True,width='stretch')
     else: st.info('No email jobs yet.')
     st.caption('Accepted = SendGrid accepted the request, not confirmed inbox delivery. Uncertain or stale sending/preparing jobs are not retried automatically. Check SendGrid activity before resending.')
+
 

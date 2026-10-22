@@ -341,3 +341,37 @@ requirements.txt. Verified on October 21, 2026 with Python 3.12.14 and
 Streamlit 1.66.0: all 79 tests passed, including the 15 new Aircall search
 regressions and the existing report, PDF, email, and scheduling tests. API and
 email tests use mocks; verification does not send live emails or fetch client data.
+
+## Readable dates and Speed to Lead
+
+Table timestamps use `MM/DD/YYYY hh:mm:ssAM/PM`, for example
+`10/22/2026 12:00:00AM`, in the report timezone selected in Settings. This applies
+to person and call tables, transcript search results, email history, and CSV/PDF
+tables. CSVs containing timestamps include `report_timezone`. Durations remain
+durations, and internal timestamps and JSON metadata remain ISO/UTC for calculations.
+
+The people table places **First called** and **Speed to Lead** next to the person's
+creation date. Speed is elapsed time from Pipedrive person creation to the first
+outbound Aircall attempt after creation, across the person's fetched phone numbers.
+Unanswered attempts count; inbound calls and calls before creation do not.
+
+- **Green:** at or under 5 minutes.
+- **Yellow:** over 5 minutes through 10 minutes, inclusive.
+- **Red:** over 10 minutes.
+
+Calls must have been fetched with an activity window covering the person's creation
+time. Missing history, an unfetched person, or a shared/invalid phone is shown as
+unknown with a gray cell. No outbound calls in the fetched period is shown explicitly,
+with no invented zero or elapsed-time value. Extend the activity end and fetch again
+to include follow-up calls after the cohort period. The independent Aircall search
+has no Pipedrive creation dates, so Speed to Lead appears in the UTM people tables.
+
+People CSVs include first-call time/ID, elapsed seconds, a readable duration, status,
+and the color category (CSV does not store cell colors). The PDF's contact table
+also includes the duration/category and first-call time. Both all-UTM and individual
+UTM tabs use the same calculation, independent of the matching-only detail filter.
+
+Verified October 22, 2026: 101 Python tests passed, including threshold boundaries,
+daylight-saving elapsed time, incomplete history, timestamp exports, and Streamlit
+tables. The PDF summary was rendered and visually checked with synthetic data.
+

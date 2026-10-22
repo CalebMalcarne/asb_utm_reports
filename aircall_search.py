@@ -102,7 +102,7 @@ def export_search(dataset, options, matching_only=True, include_text=True,
     calls = [x['call'] for x in chosen]
     parts = {}
     if chosen:
-        parts['Aircall_Activity.csv'] = csv_bytes(result_rows(chosen))
+        parts['Aircall_Activity.csv'] = csv_bytes(result_rows(chosen),zone=dataset['meta'].get('timezone','UTC'))
     if include_text:
         for item in chosen:
             call = item['call']
@@ -120,3 +120,4 @@ def export_search(dataset, options, matching_only=True, include_text=True,
                     note='Call tags reflect the fetched snapshot. Calls without searchable transcripts are unknown, not negative matches. Aircall contact names do not establish a Pipedrive identity.')
     parts['Aircall_search_settings.json'] = json.dumps(metadata, indent=2, ensure_ascii=False).encode('utf-8')
     return parts
+

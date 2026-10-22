@@ -46,7 +46,11 @@ def build(data,options):
                     **{k:data[k] for k in ('name','company','timezone') if k in data}},'options':copy.deepcopy(options)}
 
 def select_rows(report,groups=None,matched_only=False):
-    return [r for r in report['rows'] if (groups is None or r['group_key'] in groups) and (not matched_only or r['matches_tag'])]
+    from report_display import speed_to_lead
+    by_person=defaultdict(list)
+    for call in report['calls']: by_person[str(call['person_id'])].append(call)
+    return [{**r,**speed_to_lead(r,by_person[str(r['person_id'])])} for r in report['rows']
+            if (groups is None or r['group_key'] in groups) and (not matched_only or r['matches_tag'])]
 
 def enrich(report,settings,person_ids,start,end,transcripts=True,progress=None,client=None):
     """All phone numbers on selected people; shared numbers in cohort flagged, never guessed."""
@@ -108,10 +112,10 @@ def export_parts(report,groups=None,matched_only=False,include_details=True,incl
     parts={'utm_summary.csv':csv_bytes(summary,['row_type','utm_group','people','matching_people','match_pct']+stat_columns+['aircall_people_fetched','calls']+list(dict.fromkeys(k for r in summary for k in r if k.startswith('tag:'))))}
     if include_details:
         detail=[{**public,**stats_by_group[row['group_key']]} for row,public in zip(people,public_rows(people))]
-        parts['people.csv']=csv_bytes(detail,list(detail[0]) if detail else ['person_id','name','utm_group','matches_tag','group_people']+['group_'+k for k in stat_columns])
+        parts['people.csv']=csv_bytes(detail,list(detail[0]) if detail else ['person_id','name','utm_group','matches_tag','group_people']+['group_'+k for k in stat_columns],zone=report['meta'].get('timezone','UTC'))
     calls=[{k:v for k,v in c.items() if k!='group_key' and (include_transcripts or k!='transcript')} for c in report['calls'] if c['person_id'] in ids]
     if include_calls:
-        parts['aircall_activity.csv']=csv_bytes(calls,list(calls[0]) if calls else ['person_id','call_id','transcript_status'])
+        parts['aircall_activity.csv']=csv_bytes(calls,list(calls[0]) if calls else ['person_id','call_id','transcript_status'],zone=report['meta'].get('timezone','UTC'))
         if include_transcripts:
             for c in calls:
                 if c.get('transcript'): parts[f'transcripts/call_{c["call_id"]}.txt']=c['transcript'].encode('utf-8')
@@ -160,8 +164,8 @@ def full_report_parts(report,groups=None,created_at=None,transcript_search=None)
     if matching: parts['Match_people.csv']=match_parts['people.csv']
     calls=[{k:v for k,v in c.items() if k!='group_key'} for c in report['calls'] if c['person_id'] in ids]
     match_calls=[c for c in calls if c['person_id'] in matched_ids]
-    if calls: parts['Aircall_Activity.csv']=csv_bytes(calls)
-    if match_calls: parts['Match_aircall_activity.csv']=csv_bytes(match_calls)
+    if calls: parts['Aircall_Activity.csv']=csv_bytes(calls,zone=report['meta'].get('timezone','UTC'))
+    if match_calls: parts['Match_aircall_activity.csv']=csv_bytes(match_calls,zone=report['meta'].get('timezone','UTC'))
     parts['Overall Summary.pdf']=overall_summary_pdf(report,cohort,groups,created_at)
     by_id={r['person_id']:r for r in cohort}
     for call in calls:
@@ -173,4 +177,5 @@ def full_report_parts(report,groups=None,created_at=None,transcript_search=None)
         parts.update(search_export_parts(calls,transcript_search,
                      {**report['meta'],'selected_groups':groups,'scope':'Fetched calls for this UTM export'}))
     return parts
+
 

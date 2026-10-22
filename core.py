@@ -185,7 +185,11 @@ def summarize_all(rows,catalog=None,stat_tags=None):
 def public_rows(rows):
     return [{k:('; '.join(v) if isinstance(v,list) else v) for k,v in r.items() if k not in ('tag_tokens','group_key')} for r in rows]
 
-def csv_bytes(rows,columns=None):
+def csv_bytes(rows,columns=None,zone='UTC'):
+    from report_display import table_rows
+    rows=table_rows(rows,zone,include_timezone=True)
+    if columns is not None and any('report_timezone' in r for r in rows):
+        columns=list(dict.fromkeys([*columns,'report_timezone']))
     fields=columns or list(dict.fromkeys(k for r in rows for k in r))
     out=io.StringIO(newline=''); writer=csv.DictWriter(out,fieldnames=fields,extrasaction='ignore'); writer.writeheader()
     def safe(v):
@@ -198,4 +202,5 @@ def csv_bytes(rows,columns=None):
 def six_month_boundary(now):
     year,month0=divmod(now.year*12+now.month-1-6,12); month=month0+1
     return now.replace(year=year,month=month,day=min(now.day,calendar.monthrange(year,month)[1]))
+
 
