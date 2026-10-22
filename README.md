@@ -346,6 +346,21 @@ email tests use mocks; verification does not send live emails or fetch client da
 
 ### After-hours leads
 
+Each UTM tab, including **All UTM codes**, displays **Average callback**,
+**Shortest callback**, and **Most frequent callback** for workday leads and
+overnight/after-hours leads, plus an overall adjusted summary. Each verified first
+outbound call counts once per person. After-hours leads use response after opening;
+callbacks before opening count as zero. Overall averages weight people equally,
+not UTM groups or category averages. Pending, uncalled, and unknown results are
+excluded, with the measured count shown against total leads in each category.
+The figures refresh as the automatic lookup completes and retain the full tab's
+scope when **Only Show Matches** is enabled.
+
+Most frequent callback uses one-minute ranges (for example, **5–<6 min**).
+Ranges must contain at least two callbacks; otherwise **No repeated range** is
+shown. Tied ranges are identified, with details in the metric's help tooltip.
+Average and shortest durations display hours, minutes, and seconds.
+
 All UTM people tables and People CSV exports include **After-hours lead**,
 **Next workday start**, and **Response after opening**. Business hours default to
 9:00 AM–5:00 PM Monday–Friday, America/New_York. Change the days, opening/closing

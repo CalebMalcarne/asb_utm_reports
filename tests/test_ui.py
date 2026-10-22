@@ -7,7 +7,7 @@ def test_demo_report_aircall_settings_and_email_screens(tmp_path,monkeypatch):
     assert not app.exception
     next(b for b in app.button if b.label=='Load demo').click().run()
     assert not app.exception
-    assert [m.value for m in app.tabs[0].metric]==['5','3','60.0%','20.0%']
+    assert [m.value for m in app.tabs[0].metric][:4]==['5','3','60.0%','20.0%']
     next(b for b in app.button if b.label=='Fetch calls & transcripts').click().run()
     assert not app.exception
     assert len(app.session_state.report['calls'])==3
@@ -93,8 +93,8 @@ def test_all_and_individual_tabs_have_scoped_controls_and_no_switch_reruns(tmp_p
     assert [t.label for t in app.tabs]==['All UTM codes','AFLT2421 / Karmaoholic - 48824','instagram / organic','meta / retirement_october']
     # Static tabs do not register a widget that emits tab-change reruns.
     assert not app.get('tab_container')[0].proto.tab_container.id
-    assert [m.value for m in app.tabs[0].metric]==['5','3','60.0%','20.0%']
-    assert [m.value for m in app.tabs[3].metric]==['2','1','50.0%','50.0%']
+    assert [m.value for m in app.tabs[0].metric][:4]==['5','3','60.0%','20.0%']
+    assert [m.value for m in app.tabs[3].metric][:4]==['2','1','50.0%','50.0%']
     def rows(key): return list(csv.DictReader(io.StringIO(downloads[key][0].decode('utf-8-sig'))))
     assert {r['person_id'] for r in rows('people_all')}=={'1','2','3','4','5'}
     assert len(rows('summary_all'))==4
@@ -179,3 +179,4 @@ def test_save_and_check_sendgrid_uses_new_form_credentials_without_email(tmp_pat
     assert calls[0][1]['json']['mail_settings']['sandbox_mode']['enable'] is True
     assert store.jobs()==[] # validation is not recorded as a delivery
     assert any('Sandbox validation passed' in x.value for x in app.success)
+

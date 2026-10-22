@@ -17,6 +17,7 @@ from aircall_ui import render_aircall_search,search_controls,report_search_ui
 from report_display import format_timestamp,table_rows,people_table
 from speed_lookup import SpeedLookup,lookup_key,pending_result
 from business_hours import validate_hours,WEEKDAYS
+from callback_metrics import render_callback_metrics
 
 UTC=timezone.utc
 st.set_page_config(page_title='ASB UTM Reports',page_icon='📊',layout='wide')
@@ -293,6 +294,7 @@ if page=='Reports':
                 col.metric(name.title(),f'{pct:.1f}%' if pct is not None else '—',
                            delta=f"{count} of {stat['people']} people" if count is not None else 'Select statistic tags',delta_color='off')
             st.caption('Qualified and contacted are based on current Pipedrive tags. Each percentage uses everyone in this tab, including people hidden by the matching-only filter.')
+            render_callback_metrics(filtered)
             if groups is None:
                 st.subheader('UTM group comparison')
                 st.dataframe(pd.DataFrame([{k:v for k,v in r.items() if k!='group_key'} for r in summary]),hide_index=True,width='stretch')
