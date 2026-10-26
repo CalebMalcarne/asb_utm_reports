@@ -46,7 +46,7 @@ def render_callback_metrics(rows):
     import streamlit as st
     summaries=callback_stats(rows)
     st.subheader('Callback times')
-    for group,title in [('overall','Overall · adjusted for after-hours leads'),
+    for group,title in [('overall','Overall · elapsed time from arrival'),
                         ('workday','Workday leads'),('after_hours','Overnight / after-hours leads')]:
         stats=summaries[group]
         st.caption(f"{title} · {stats['count']:,} of {stats['total']:,} leads with verified callbacks")
@@ -59,4 +59,4 @@ def render_callback_metrics(rows):
         if modes:
             detail+=' Most frequent: '+', '.join(minute_range(m) for m in modes[:10])+(' (additional tied ranges omitted)' if len(modes)>10 else '')+f"; {stats['mode_count']} callbacks per range."
         c.metric('Most frequent callback',mode,help=detail)
-    st.caption('Workday leads use creation-to-first-outbound-call time. Overnight/after-hours leads use response after the next opening; calls before opening count as zero. Pending, uncalled, and unknown results are excluded. Metrics use everyone in this UTM tab, including people hidden by Only Show Matches, and update as lookup results arrive.')
+    st.caption('Callback times measure arrival to first outbound call. Workday leads keep the 5-/10-minute thresholds; overnight/after-hours leads have 24 elapsed hours from arrival, including weekends. Pending, uncalled, and unknown results are excluded. Metrics use everyone in this UTM tab, including people hidden by Only Show Matches, and update as lookup results arrive.')

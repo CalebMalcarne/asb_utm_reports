@@ -348,9 +348,9 @@ email tests use mocks; verification does not send live emails or fetch client da
 
 Each UTM tab, including **All UTM codes**, displays **Average callback**,
 **Shortest callback**, and **Most frequent callback** for workday leads and
-overnight/after-hours leads, plus an overall adjusted summary. Each verified first
-outbound call counts once per person. After-hours leads use response after opening;
-callbacks before opening count as zero. Overall averages weight people equally,
+overnight/after-hours leads, plus an overall summary. Each verified first
+outbound call counts once per person. Both categories measure elapsed time from
+arrival to first call. Overall averages weight people equally,
 not UTM groups or category averages. Pending, uncalled, and unknown results are
 excluded, with the measured count shown against total leads in each category.
 The figures refresh as the automatic lookup completes and retain the full tab's
@@ -362,22 +362,31 @@ shown. Tied ranges are identified, with details in the metric's help tooltip.
 Average and shortest durations display hours, minutes, and seconds.
 
 All UTM people tables and People CSV exports include **After-hours lead**,
-**Next workday start**, and **Response after opening**. Business hours default to
-9:00 AM–5:00 PM Monday–Friday, America/New_York. Change the days, opening/closing
-times, or timezone under **Settings → Business hours**. The active schedule is
+**Next workday start**, **After-hours callback time**, **Callback deadline**,
+**Response target**, and **Response status**. Business hours default to
+9:00 AM–6:00 PM Monday–Friday and 11:00 AM–2:00 PM Saturday, America/New_York;
+Sunday is closed. Change the days, each day's opening/closing times, or timezone
+under **Settings → Business hours**. Saved copies of the former Monday–Friday
+9–5 default are automatically upgraded; other custom schedules are retained.
+The active schedule is
 shown above each people table and included in each exported person row.
 
-Before 9:00 AM, at/after 5:00 PM, and closed-day arrivals are after hours. Their
-response is measured from the next scheduled opening to their first outbound
-Aircall attempt. For example, a Friday-evening lead called Monday at 9:05 AM has
-a five-minute response after opening. A call made before that opening is labeled
-**Called before opening** (zero late seconds). Unknown or pending first-call times
-retain their status rather than becoming zero. The original creation-to-call Speed
-to Lead remains available alongside this additional measure. Both duration cells
-use green ≤5 minutes, yellow >5 through 10 minutes, and red >10 minutes.
+Arrivals before opening, at/after closing, or on closed days are after-hours leads.
+They have **24 elapsed hours from arrival** to receive their first outbound
+Aircall attempt. A callback at exactly 24 hours is on time (green); over 24 hours
+is late (red). Both displayed duration cells use that rule for after-hours leads.
+The previous response-after-opening calculation is superseded, including in the
+callback averages. Calls made before opening count their actual elapsed time.
+
+An uncalled after-hours lead is **Overdue — no call as of lookup** only when a
+successful Aircall lookup covered more than its full 24-hour allowance. Pending,
+failed, and incomplete history remain unknown. **Calls checked through** records
+the evidence cutoff; use **Refresh Speed to Lead** to include newer activity.
+No-call rows never receive an invented callback duration or enter averages.
 
 The opening date skips closed weekdays and uses local daylight-saving rules;
-after opening, the response is elapsed clock time, not accumulated working hours.
+it is informational and does not extend the deadline. The 24-hour allowance is
+clock time, including nights, Sundays, and daylight-saving transitions.
 This is a recurring weekly schedule; holidays are not excluded automatically.
 Changing business hours recalculates existing results without extra Aircall calls.
 
@@ -409,9 +418,11 @@ show a Settings prompt; failures and unavailable history are explicit gray statu
 Manual Aircall activity/transcript retrieval and its date settings remain separate;
 an automatic lookup never overwrites fetched transcripts or call exports.
 
-- **Green:** at or under 5 minutes.
-- **Yellow:** over 5 minutes through 10 minutes, inclusive.
-- **Red:** over 10 minutes.
+- **Workday green:** at or under 5 minutes.
+- **Workday yellow:** over 5 minutes through 10 minutes, inclusive.
+- **Workday red:** over 10 minutes.
+- **After-hours green:** at or under 24 elapsed hours from arrival.
+- **After-hours red:** over 24 elapsed hours from arrival.
 
 Missing history or a shared/invalid phone is shown as unknown with a gray cell.
 No outbound calls as of the lookup time is shown explicitly, with no invented zero

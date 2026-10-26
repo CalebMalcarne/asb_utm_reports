@@ -74,11 +74,11 @@ def test_streamlit_metrics_update_with_lookup_and_respect_utm_scope(tmp_path,mon
     app.run()
     assert not app.exception
     values=[m.value for m in app.tabs[0].metric]
-    assert values[4:7]==['0h 04m 30s','0h 01m 00s','No repeated range']
+    assert values[4:7]==['7h 34m 30s','0h 01m 00s','No repeated range']
     assert values[7:10]==['0h 01m 30s','0h 01m 00s','No repeated range']
-    assert values[10:13]==['0h 07m 30s','0h 05m 00s','No repeated range']
+    assert values[10:13]==['15h 07m 30s','15h 05m 00s','No repeated range']
     meta=next(t for t in app.tabs if t.label.startswith('meta /'))
-    assert meta.metric[4].value=='0h 07m 30s'
+    assert meta.metric[4].value=='15h 07m 30s'
     assert meta.metric[7].value=='—'
     app.tabs[0].checkbox[0].check().run()
     assert not app.exception

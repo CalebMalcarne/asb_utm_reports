@@ -16,7 +16,7 @@ from demo import sample,DemoAircall
 from aircall_ui import render_aircall_search,search_controls,report_search_ui
 from report_display import format_timestamp,table_rows,people_table
 from speed_lookup import SpeedLookup,lookup_key,pending_result
-from business_hours import validate_hours,WEEKDAYS
+from business_hours import validate_hours,WEEKDAYS,day_hours,schedule_label
 from callback_metrics import render_callback_metrics
 
 UTC=timezone.utc
@@ -104,14 +104,19 @@ if page=='Settings':
     hours=validate_hours(settings.get('business_hours'))
     with st.form('business_hours'):
         workdays=st.multiselect('Business days',list(range(7)),default=hours['days'],format_func=lambda d:WEEKDAYS[d])
-        a,b,c=st.columns(3)
-        with a: opens=st.time_input('Workday starts',walltime.fromisoformat(hours['open']))
-        with b: closes=st.time_input('Workday ends',walltime.fromisoformat(hours['close']))
-        with c: business_zone=st.selectbox('Business timezone',list(dict.fromkeys([hours['timezone'],*zones])))
+        business_zone=st.selectbox('Business timezone',list(dict.fromkeys([hours['timezone'],*zones])))
+        overrides={}
+        with st.expander('Daily opening and closing times',expanded=True):
+            for day in range(7):
+                opening,closing=day_hours(hours,day)
+                left,right=st.columns(2)
+                with left: daily_open=st.time_input(WEEKDAYS[day]+' opens',opening,key='business_open_'+str(day))
+                with right: daily_close=st.time_input(WEEKDAYS[day]+' closes',closing,key='business_close_'+str(day))
+                overrides[str(day)]={'open':daily_open.isoformat(),'close':daily_close.isoformat()}
         st.caption('Leads before opening, at/after closing, or on closed days are after-hours leads. Weekly schedule only; holidays are not excluded automatically.')
         if st.form_submit_button('Save business hours'):
             try:
-                updated=validate_hours({'days':workdays,'open':opens.isoformat(),'close':closes.isoformat(),'timezone':business_zone})
+                updated=validate_hours({'days':workdays,'open':hours['open'],'close':hours['close'],'timezone':business_zone,'overrides':overrides})
                 settings=store.settings(); settings['business_hours']=updated; store.save_settings(settings)
                 st.success('Business hours saved. Reports recalculate using existing first-call times; no new Aircall pull is needed.')
             except ValueError as exc: show_error(exc)
@@ -304,13 +309,15 @@ if page=='Reports':
             st.subheader('Data sheet')
             st.caption(f"Showing {len(detail):,} of {len(filtered):,} people")
             hours=report['meta']['business_hours']
-            st.caption('Business hours: '+', '.join(WEEKDAYS[d][:3] for d in hours['days'])+' · '+hours['open']+'–'+hours['close']+' · '+hours['timezone']+'. After-hours response is elapsed time from the next opening to the first outbound call; calls before opening are labeled separately.')
-            st.caption('Times: '+tz+' · Speed to Lead loads automatically: creation to first outbound attempt (answered or unanswered), through the lookup time. Green ≤5 min; yellow >5 through 10 min; red >10 min. Gray means loading or no verified first attempt. Transcripts are fetched separately below.')
+            st.caption('Business hours: '+schedule_label(hours)+' · '+hours['timezone']+'. After-hours leads have 24 elapsed hours from arrival, including closed days. Next workday start is informational; it does not extend the deadline.')
+            st.caption('Times: '+tz+' · Speed to Lead loads automatically: creation to first outbound attempt (answered or unanswered). Workday: green ≤5 min; yellow >5 through 10 min; red >10 min. After-hours: green ≤24 hours; red >24 hours. No-call deadlines are assessed through the last lookup time; refresh Speed to Lead to check newer activity.')
             st.dataframe(people_table(public_rows(detail),tz),hide_index=True,width='stretch',
                          column_config={'speed_to_lead':'Speed to Lead','first_called_at':'First called',
                                         'speed_to_lead_color':'Speed category','speed_to_lead_status':'Speed status',
                                         'after_hours_lead':'After-hours lead','next_workday_start':'Next workday start',
-                                        'after_hours_response':'Response after opening',
+                                        'after_hours_response':'After-hours callback time',
+                                        'response_deadline':'Callback deadline','response_target':'Response target','response_status':'Response status',
+                                        'first_call_checked_through':'Calls checked through',
                                         'after_hours_response_color':'After-hours response category'})
             if not detail: st.info('No people match this detail filter. Group statistics still use all people in this tab.')
             parts=export_parts(report,groups,only)

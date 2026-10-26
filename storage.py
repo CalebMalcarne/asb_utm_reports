@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from contextlib import contextmanager
 from cryptography.fernet import Fernet
-from business_hours import DEFAULT_HOURS
+from business_hours import DEFAULT_HOURS,migrate_hours
 
 DEFAULTS={'company':'','pipedrive_token':'','aircall_id':'','aircall_token':'','sendgrid_key':'',
           'sender_email':'','sender_name':'ASB Reports','sendgrid_region':'US','timezone':'America/New_York',
@@ -52,7 +52,9 @@ class Store:
         with self.connect() as db: db.execute('INSERT OR REPLACE INTO kv VALUES (?,?)',(key,json.dumps(value)))
     def settings(self):
         token=self.get('settings')
-        return {**DEFAULTS,**(json.loads(self.fernet.decrypt(token.encode())) if token else {})}
+        settings={**DEFAULTS,**(json.loads(self.fernet.decrypt(token.encode())) if token else {})}
+        settings['business_hours']=migrate_hours(settings['business_hours'])
+        return settings
     def save_settings(self,value): self.put('settings',self.fernet.encrypt(json.dumps(value).encode()).decode())
     def schedules(self):
         with self.connect() as db: rows=db.execute('SELECT * FROM schedules ORDER BY name').fetchall()
