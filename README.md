@@ -344,6 +344,17 @@ email tests use mocks; verification does not send live emails or fetch client da
 
 ## Readable dates and Speed to Lead
 
+The full report's **Overall Summary.pdf** includes a dedicated **Speed to Lead**
+section with overall, workday, and overnight/after-hours callback averages,
+shortest times, and most frequent one-minute ranges. Counts show verified and
+excluded leads; the business schedule, response thresholds, pending lookups,
+late callbacks, overdue uncalled leads, and evidence cutoffs are included.
+Its qualified-or-matching detail table shows arrival category, creation and first
+call times, colored response durations, 24-hour deadlines where applicable, and
+response status. Summaries use the full selected UTM scope, while person details
+retain the report's qualified-or-matching selection. Loading or unknown data stays
+explicit; exporting does not trigger new Aircall requests.
+
 ### After-hours leads
 
 Each UTM tab, including **All UTM codes**, displays **Average callback**,

@@ -12,9 +12,11 @@ from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, LongTable
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, LongTable, PageBreak
 from core import UTMS, parse_dt, statistic_tags, summarize, summarize_all
 from report_display import format_timestamp
+from business_hours import validate_hours,schedule_label
+from callback_metrics import callback_stats,duration_label,minute_range
 
 
 def overall_summary_pdf(report, cohort, groups=None, created_at=None):
@@ -33,7 +35,8 @@ def overall_summary_pdf(report, cohort, groups=None, created_at=None):
     styles.add(ParagraphStyle(name='TableHead',parent=styles['Copy'],fontName='ASBVeraBold',textColor=colors.white,fontSize=7,leading=10))
 
     def text(value):
-        return escape(re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]','',str(value if value is not None else ''))).replace('\n','<br/>')
+        value=str(value if value is not None else '').replace('–','-').replace('—','-').replace('…','...')
+        return escape(re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]','',value)).replace('\n','<br/>')
     def p(value,style='Copy'): return Paragraph(text(value),styles[style])
     meta=report['meta']; opts=report['options']; catalog=report['catalog']
     zone=meta.get('timezone','UTC')
@@ -98,6 +101,56 @@ def overall_summary_pdf(report, cohort, groups=None, created_at=None):
                      [[g['utm_group'],g['people'],rate(g,'qualified_pct'),rate(g,'match_pct'),rate(g,'contacted_pct')] for g in grouped],
                      [usable-280,55,75,75,75]))
     else: story.append(p('No people in the selected UTM scope.'))
+    story.extend([PageBreak(),p('Speed to Lead','ReportTitle')])
+    hours=validate_hours(meta.get('business_hours'))
+    story.extend([p('Business hours: '+schedule_label(hours)+' | '+hours['timezone']),
+                  p('Workday leads: green at or under 5 minutes; yellow over 5 through 10 minutes; red over 10 minutes. After-hours leads: green at or under 24 elapsed hours from arrival; red over 24 hours. Nights and closed days count toward the 24-hour deadline.','SmallCopy'),
+                  p('Response time means creation to first outbound Aircall attempt, answered or unanswered. These summaries include all people in this export scope. Pending, uncalled, and unknown results are excluded from callback averages; they are never treated as zero.','SmallCopy')])
+    callbacks=callback_stats(cohort)
+    callback_rows=[]
+    for key,label in [('overall','Overall'),('workday','Workday leads'),('after_hours','Overnight / after-hours')]:
+        stats=callbacks[key]; modes=stats['mode_minutes']
+        mode='Not available' if not stats['count'] else 'No repeated range' if not modes else '\n'.join(minute_range(m) for m in modes[:5])
+        if len(modes)>5: mode+=f'\n+{len(modes)-5} tied ranges'
+        if modes: mode+=f"\n{stats['mode_count']} callbacks per range"
+        callback_rows.append([label,stats['total'],stats['count'],stats['excluded'],
+                              duration_label(stats['average_seconds']),duration_label(stats['shortest_seconds']),mode])
+    story.append(tabular(['Lead category','Total leads','Verified callbacks','Excluded','Average callback','Shortest callback','Most frequent callback'],
+                         callback_rows,[140,55,65,55,105,105,usable-525]))
+    story.append(p('Most frequent callback uses one-minute ranges: 5-<6 min means at least 5 and less than 6 minutes. A range must contain at least two callbacks; all ties are counted, with up to five ranges shown.','SmallCopy'))
+    late=sum(r.get('response_status')=='Late callback — over 24h' for r in cohort)
+    overdue=sum(r.get('response_status')=='Overdue — no call as of lookup' for r in cohort)
+    pending=sum(r.get('speed_to_lead_status')=='Loading…' for r in cohort)
+    story.append(p(f'After-hours follow-up: {late} late callbacks; {overdue} overdue without a call as of lookup. Pending first-call lookups: {pending}.','SmallCopy'))
+    checked=[parse_dt(r.get('first_call_checked_through')) for r in cohort]
+    checked=[t for t in checked if t]
+    if checked:
+        story.append(p(f'Call-history check cutoffs range from {stamp(min(checked).isoformat())} to {stamp(max(checked).isoformat())}. Per-person cutoffs appear below.','SmallCopy'))
+    story.append(p('Overdue status uses verified call history through the last lookup, not the PDF export time. Refresh Speed to Lead before exporting to include newer activity. Failed or incomplete lookups remain unknown.','SmallCopy'))
+    story.append(p(f'Speed to Lead details - qualified or matching people ({len(featured)})','SectionTitle'))
+    if not featured:
+        story.append(p('No qualified or matching people in this scope. Summary metrics above still use all scoped leads.'))
+    else:
+        response_rows=[]
+        for r in featured:
+            after=r.get('after_hours_lead')
+            category='After-hours' if after=='Yes' else 'Workday' if after=='No' else 'Unknown arrival'
+            deadline=stamp(r['response_deadline']) if r.get('response_deadline') else 'Not applicable'
+            status=r.get('response_status') or r.get('speed_to_lead_status') or 'Not fetched'
+            color=r.get('speed_to_lead_color') or 'Unknown / pending'
+            response_rows.append([f"{r['name']}\nPerson ID: {r['person_id']}\n{r['utm_group']}",
+                                  f"{category}\nCreated: {stamp(r['created_at'])}\nFirst called: {stamp(r['first_called_at']) if r.get('first_called_at') else 'Not verified'}",
+                                  r.get('speed_to_lead','Not fetched')+'\n'+color,
+                                  ('24 elapsed hours' if after=='Yes' else '5 / 10 minutes' if after=='No' else 'Unknown')+'\nDeadline: '+deadline,
+                                  status+'\nChecked through: '+stamp(r.get('first_call_checked_through'))])
+        response_table=tabular(['Person / UTM group','Arrival / first call','Speed to Lead','Response target','Status / evidence cutoff'],
+                               response_rows,[155,175,105,145,usable-580])
+        fills={'Green':'#dcfce7','Yellow':'#fef9c3','Red':'#fee2e2'}
+        for index,r in enumerate(featured,1):
+            fill=fills.get(r.get('speed_to_lead_color'),'#e5e7eb')
+            response_table.setStyle(TableStyle([('BACKGROUND',(2,index),(2,index),colors.HexColor(fill))]))
+        story.append(response_table)
+    story.append(PageBreak())
     story.append(p(f'Qualified or matching people ({len(featured)})','SectionTitle'))
     if not featured: story.append(p('No people are qualified or match the searched tags in this scope.'))
     else:
@@ -106,10 +159,7 @@ def overall_summary_pdf(report, cohort, groups=None, created_at=None):
             tags=set(r['tag_tokens'])
             flags=[label for condition,label in [(bool(tags & qualified),'Qualified'),(r['matches_tag'],'Matched'),(bool(tags & contacted),'Contacted')] if condition]
             rows.append([f"{r['name']}\nPerson ID: {r['person_id']}\nCreated: {stamp(r['created_at'])}",
-                         ('\n'.join(r['phones']+r['emails']) or 'Not provided')+
-                         '\nSpeed to Lead: '+r.get('speed_to_lead','Not fetched')+
-                         (' ('+r['speed_to_lead_color']+')' if r.get('speed_to_lead_color') else '')+
-                         ('\nFirst called: '+stamp(r['first_called_at']) if r.get('first_called_at') else ''),
+                         ('\n'.join(r['phones']+r['emails']) or 'Not provided'),
                          '\n'.join(f'{u}: {r[u]}' for u in UTMS if r.get(u)),
                          '\n'.join(r['tags']) or 'None',', '.join(flags)])
         story.append(tabular(['Person','Contact details','UTM values','Pipedrive tags','Included as'],rows,[145,155,usable-480,100,80]))
