@@ -342,7 +342,55 @@ Streamlit 1.66.0: all 79 tests passed, including the 15 new Aircall search
 regressions and the existing report, PDF, email, and scheduling tests. API and
 email tests use mocks; verification does not send live emails or fetch client data.
 
-## Readable dates and Speed to Lead
+## Agent Analytics
+
+The **Agent Analytics** menu loads all Aircall calls for its own selected call
+period (day/week/month/custom), without a call tag or talk-time filter. Each agent
+row shows outbound calls made and separate workday/after-hours first-response
+averages on the right. Click the arrow/name to expand its call data sheet, inbound
+and answered counts, total/average call duration, answered-to-end time, response
+sample counts, exports, and transcript controls. Aircall user IDs keep agents with
+identical names separate. Missing user IDs are retained in an unranked
+**Unknown / system** group. Inbound-only agents remain visible.
+
+Response measurements use **all leads in the Pipedrive UTM report currently loaded
+under Reports**, not just matching tags. The cohort creation period and sample
+counts are shown. The existing background first-call lookup is reused or started;
+**Refresh lead response times** checks again. Only a verified first outbound call
+whose ID, time, and unique phone match that lead is credited to its agent, and
+only if the call falls inside the selected agent call period. Inbound calls,
+follow-ups by any agent, earlier first calls outside the period, shared phone
+numbers, missing CRM matches, and pending/failed lookups do not enter response
+averages. They still count as activity. Both submission categories use elapsed
+creation-to-first-call time, with the existing workday 5/10-minute thresholds and
+after-hours 24-hour target. Averages describe this loaded lead cohort, not all
+customers called by the agent. The Aircall call's user identifies attribution;
+individual transfer/conference participants are not inferred.
+
+Sorting supports calls made (descending), overall response average, workday
+response average, or after-hours response average (ascending). Separate ranks are
+calculated across the full loaded period before a single-agent export is selected.
+Ties share competition ranks (1, 1, 3); response categories without samples are
+unranked. No minimum response sample size is imposed; counts are always included.
+Calls-made ties are displayed by faster overall response, then name/ID, while
+retaining the same calls rank. Answered-to-end time may include hold time.
+
+**All-agent report ZIP** includes `Agent_Report.pdf`, the complete ordered
+`Agent_rankings.csv`, `Calls.csv`, verified `Lead_response_times.csv` when present,
+and `Report_settings.json`. Single-agent reports include only that agent's calls
+and response records, with their ranks and ranking population sizes retained.
+Direct PDF and per-agent calls CSV downloads are also available.
+
+Transcript retrieval is optional. **Fetch all remaining transcripts** retrieves
+either all agents' calls or just the expanded agent's calls, in resumable batches
+of 100. Completed batches are retained if a later API request fails. Availability,
+pending, empty, and forbidden coverage is shown. **Download available transcripts
+ZIP** contains original `First_Last_<CALLID>.txt` files within unique agent folders
+and a manifest identifying each agent, call, and transcript status. Calls without
+available transcripts are never represented as successfully downloaded text.
+Demo mode runs entirely on synthetic data and cannot mix with live leads.
+
+## Readable dates and Speed to Lead (report exports)
 
 The full report's **Overall Summary.pdf** includes a dedicated **Speed to Lead**
 section with overall, workday, and overnight/after-hours callback averages,

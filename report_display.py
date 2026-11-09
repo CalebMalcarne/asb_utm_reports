@@ -6,7 +6,7 @@ from core import parse_dt
 DATE_FORMAT = '%m/%d/%Y %I:%M:%S%p'
 DATE_COLUMNS = {'created_at', 'started_at', 'answered_at', 'ended_at', 'first_called_at',
                 'activity_start', 'activity_end', 'fetched_at', 'aircall_fetched_at',
-                'created', 'updated', 'next_run', 'next_workday_start','response_deadline','first_call_checked_through'}
+                'created', 'updated', 'next_run', 'next_workday_start','response_deadline','first_call_checked_through','person_created_at'}
 SPEED_COLORS = {'Green': ('#15803d', '#ffffff'),
                 'Yellow': ('#fef08a', '#172338'), 'Red': ('#b91c1c', '#ffffff')}
 

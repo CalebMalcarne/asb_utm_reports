@@ -24,7 +24,7 @@ st.set_page_config(page_title='ASB UTM Reports',page_icon='📊',layout='wide')
 store=Store(); settings=store.settings()
 with st.sidebar:
     st.title('ASB Reports')
-    page=st.radio('Menu',['Reports','Aircall export & search','Email & scheduling','Settings'])
+    page=st.radio('Menu',['Reports','Agent Analytics','Aircall export & search','Email & scheduling','Settings'])
     st.caption('Pipedrive → UTM groups → tags → Aircall')
     heartbeat=store.get('worker_heartbeat',0)
     st.caption('● Scheduler worker running' if time.time()-heartbeat<45 else '○ Scheduler worker offline')
@@ -168,6 +168,11 @@ if page=='Settings':
 
 if page=='Aircall export & search':
     render_aircall_search(settings,show_error)
+    st.stop()
+
+if page=='Agent Analytics':
+    from agent_ui import render_agent_analytics
+    render_agent_analytics(settings,show_error)
     st.stop()
 
 if page=='Reports':

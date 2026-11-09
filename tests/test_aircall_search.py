@@ -15,7 +15,7 @@ class Client:
         t=int(self.start.timestamp())+1
         return [
             dict(id=1,started_at=t,raw_digits='+12025550101',tags=[{'id':1,'name':'Qualified'}],
-                 contact={'id':12,'first_name':'Mark','last_name':'Layman'}),
+                 contact={'id':12,'first_name':'Mark','last_name':'Layman'},user={'id':47,'name':'Example Agent'}),
             dict(id=2,started_at=t,tags=[{'id':2,'name':'Unqualified'}]),
             dict(id=3,started_at=t,tags=[]),
             dict(id=4,started_at=int(self.end.timestamp()),tags=[]),
@@ -36,6 +36,7 @@ def test_all_calls_no_phone_filter_boundaries_dedup_and_tag_rules():
     data=fetch_calls({},start,end,client=client)
     assert [c['call_id'] for c in data['calls']]==['1','2','3']
     assert data['calls'][0]['name']=='Mark Layman'
+    assert data['calls'][0]['agent_id']=='47'
     assert all(c['transcript_status']=='not requested' for c in data['calls'])
     assert client.requested==[]
     filtered=fetch_calls({},start,end,['1'],client=client)
@@ -110,3 +111,4 @@ def test_dense_account_wide_windows_and_fractional_end():
     from test_api import FakeAircall
     client=FakeAircall([{'id':i,'created_at':i} for i in range(10)])
     assert sorted(c['id'] for c in client.calls(None,0,9.5))==list(range(10))
+
